@@ -47,6 +47,16 @@ function register(router) {
     sendJson(res, 200, rows);
   });
 
+  router.put('/api/payments/monthly-charge/:id', async (req, res) => {
+    requireAuth(req);
+    const value = Number(req.body && req.body.value);
+    if (!Number.isFinite(value) || value < 0) throw httpError(400, 'Valor inválido');
+    const existing = db.prepare('SELECT * FROM monthly_charges WHERE id = ?').get(req.params.id);
+    if (!existing) throw httpError(404, 'Mensalidade não encontrada');
+    db.prepare('UPDATE monthly_charges SET value = ? WHERE id = ?').run(value, req.params.id);
+    sendJson(res, 200, db.prepare('SELECT * FROM monthly_charges WHERE id = ?').get(req.params.id));
+  });
+
   router.post('/api/payments/monthly-charge/:id/mark-paid', async (req, res) => {
     requireAuth(req);
     db.prepare("UPDATE monthly_charges SET status = 'paid', paid_at = datetime('now') WHERE id = ?").run(req.params.id);

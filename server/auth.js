@@ -21,26 +21,34 @@ function verifyPassword(password, stored) {
   return crypto.timingSafeEqual(a, b);
 }
 
-function createSession(db, adminId) {
+// userType: 'admin' ou 'teacher'
+function createSession(db, userType, userId) {
   const token = crypto.randomBytes(32).toString('hex');
   const expiresAt = new Date(Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000).toISOString();
-  db.prepare('INSERT INTO sessions (token, admin_id, expires_at) VALUES (?, ?, ?)').run(token, adminId, expiresAt);
+  db.prepare('INSERT INTO sessions (token, user_type, user_id, expires_at) VALUES (?, ?, ?, ?)').run(token, userType, userId, expiresAt);
   return { token, expiresAt };
 }
 
-function getAdminBySession(db, token) {
+// Devolve { type: 'admin'|'teacher', id, email, name } ou null.
+function getSessionUser(db, token) {
   if (!token) return null;
-  const row = db.prepare(
-    `SELECT admins.id, admins.email, admins.name, sessions.expires_at
-     FROM sessions JOIN admins ON admins.id = sessions.admin_id
-     WHERE sessions.token = ?`
-  ).get(token);
-  if (!row) return null;
-  if (new Date(row.expires_at) < new Date()) {
+  const session = db.prepare('SELECT * FROM sessions WHERE token = ?').get(token);
+  if (!session) return null;
+  if (new Date(session.expires_at) < new Date()) {
     db.prepare('DELETE FROM sessions WHERE token = ?').run(token);
     return null;
   }
-  return { id: row.id, email: row.email, name: row.name };
+  if (session.user_type === 'admin') {
+    const row = db.prepare('SELECT id, email, name FROM admins WHERE id = ?').get(session.user_id);
+    if (!row) return null;
+    return { type: 'admin', id: row.id, email: row.email, name: row.name };
+  }
+  if (session.user_type === 'teacher') {
+    const row = db.prepare('SELECT id, login_email AS email, name FROM teachers WHERE id = ? AND active = 1').get(session.user_id);
+    if (!row) return null;
+    return { type: 'teacher', id: row.id, email: row.email, name: row.name };
+  }
+  return null;
 }
 
 function destroySession(db, token) {
@@ -76,7 +84,7 @@ module.exports = {
   hashPassword,
   verifyPassword,
   createSession,
-  getAdminBySession,
+  getSessionUser,
   destroySession,
   parseCookies,
   setSessionCookie,

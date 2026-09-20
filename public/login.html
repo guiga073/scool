@@ -18,7 +18,7 @@
           <path d="M25 13h4M25 18h4M25 23h4" stroke="#EAF1EE" stroke-width="1.4" stroke-linecap="round"/>
         </svg>
         <h1>Sistema de Reforço</h1>
-        <p>Entre com sua conta de administração</p>
+        <p>Entre com sua conta de administração ou de professor</p>
       </div>
       <form id="login-form">
         <div class="field">
@@ -45,11 +45,11 @@
       btn.disabled = true;
       btn.textContent = 'Entrando…';
       try {
-        await api.post('/api/auth/login', {
+        const result = await api.post('/api/auth/login', {
           email: document.getElementById('email').value,
           password: document.getElementById('password').value,
         });
-        window.location.href = '/';
+        window.location.href = result.type === 'teacher' ? '/professor.html' : '/';
       } catch (err) {
         errEl.textContent = err.message || 'Não foi possível entrar.';
         errEl.classList.remove('hidden');
@@ -58,8 +58,10 @@
       }
     });
 
-    // Se já estiver logado, pula direto pro app
-    api.get('/api/auth/me').then(r => { if (r.admin) window.location.href = '/'; });
+    // Se já estiver logado, pula direto pro app certo
+    api.get('/api/auth/me').then(r => {
+      if (r.user) window.location.href = r.user.type === 'teacher' ? '/professor.html' : '/';
+    });
   </script>
 </body>
 </html>

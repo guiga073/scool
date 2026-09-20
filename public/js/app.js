@@ -59,8 +59,9 @@ window.addEventListener('DOMContentLoaded', async () => {
 
   try {
     const me = await api.get('/api/auth/me');
-    if (!me.admin) { window.location.href = '/login.html'; return; }
-    document.getElementById('admin-name').textContent = me.admin.name || me.admin.email;
+    if (!me.user) { window.location.href = '/login.html'; return; }
+    if (me.user.type === 'teacher') { window.location.href = '/professor.html'; return; }
+    document.getElementById('admin-name').textContent = me.user.name || me.user.email;
   } catch (e) {
     window.location.href = '/login.html';
     return;

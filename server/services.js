@@ -138,15 +138,16 @@ function ensureMonthlyChargesGenerated(db) {
   const now = new Date();
   const month = now.getMonth() + 1;
   const year = now.getFullYear();
-  const students = db.prepare('SELECT id, monthly_value FROM students WHERE monthly_payment = 1 AND active = 1').all();
+  const students = db.prepare('SELECT id FROM students WHERE monthly_payment = 1 AND active = 1').all();
   for (const s of students) {
     const existing = db.prepare(
       'SELECT id FROM monthly_charges WHERE student_id = ? AND month = ? AND year = ?'
     ).get(s.id, month, year);
     if (existing) continue;
+    // Começa em 0 — o valor da mensalidade é definido manualmente em Pagamentos > Pagamentos especiais.
     db.prepare(
-      'INSERT INTO monthly_charges (student_id, month, year, value) VALUES (?, ?, ?, ?)'
-    ).run(s.id, month, year, s.monthly_value || 0);
+      'INSERT INTO monthly_charges (student_id, month, year, value) VALUES (?, ?, ?, 0)'
+    ).run(s.id, month, year);
   }
 }
 

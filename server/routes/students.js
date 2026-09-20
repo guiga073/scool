@@ -26,11 +26,11 @@ function register(router) {
     const b = req.body;
     if (!b.name || !b.name.trim()) throw httpError(400, 'Nome do aluno é obrigatório');
     const info = db.prepare(`
-      INSERT INTO students (name, address, guardian_name, guardian_phone, phone, email, monthly_payment, monthly_value)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO students (name, address, guardian_name, guardian_phone, phone, email, monthly_payment)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
     `).run(
       b.name.trim(), b.address || null, b.guardian_name || null, b.guardian_phone || null,
-      b.phone || null, b.email || null, b.monthly_payment ? 1 : 0, b.monthly_value != null ? Number(b.monthly_value) : null
+      b.phone || null, b.email || null, b.monthly_payment ? 1 : 0
     );
     const row = db.prepare('SELECT * FROM students WHERE id = ?').get(info.lastInsertRowid);
     sendJson(res, 201, studentToJson(row));
@@ -63,11 +63,11 @@ function register(router) {
     if (!existing) throw httpError(404, 'Aluno não encontrado');
     if (!b.name || !b.name.trim()) throw httpError(400, 'Nome do aluno é obrigatório');
     db.prepare(`
-      UPDATE students SET name=?, address=?, guardian_name=?, guardian_phone=?, phone=?, email=?, monthly_payment=?, monthly_value=?
+      UPDATE students SET name=?, address=?, guardian_name=?, guardian_phone=?, phone=?, email=?, monthly_payment=?
       WHERE id=?
     `).run(
       b.name.trim(), b.address || null, b.guardian_name || null, b.guardian_phone || null,
-      b.phone || null, b.email || null, b.monthly_payment ? 1 : 0, b.monthly_value != null ? Number(b.monthly_value) : null,
+      b.phone || null, b.email || null, b.monthly_payment ? 1 : 0,
       req.params.id
     );
     const row = db.prepare('SELECT * FROM students WHERE id = ?').get(req.params.id);

@@ -29,11 +29,7 @@ function studentFormModal(existing, onSaved) {
           <input type="checkbox" id="sf-monthly" ${s.monthly_payment ? 'checked' : ''}>
           <label for="sf-monthly">Pagamento mensal (em vez de pagar por aula)</label>
         </div>
-        <div class="hint">As aulas continuam sendo registradas e aparecendo no calendário normalmente. Elas só não entram na lista de "a receber por aula" — em vez disso, este aluno aparece em "Pagamentos especiais" com o valor mensal abaixo.</div>
-      </div>
-      <div class="field ${s.monthly_payment ? '' : 'hidden'}" id="sf-monthly-value-wrap">
-        <label for="sf-monthly-value">Valor mensal (R$)</label>
-        <input type="number" step="0.01" min="0" id="sf-monthly-value" value="${s.monthly_value != null ? s.monthly_value : ''}">
+        <div class="hint">As aulas continuam sendo registradas e aparecendo no calendário normalmente. Elas só não entram na lista de "a receber por aula" — em vez disso, este aluno aparece em "Pagamentos especiais", onde você define o valor a receber a cada mês.</div>
       </div>
       <div id="sf-error" class="alert alert-danger hidden"></div>
       <div class="form-actions">
@@ -46,9 +42,6 @@ function studentFormModal(existing, onSaved) {
   backdrop.querySelector('#sf-close').onclick = closeModal;
   backdrop.querySelector('#sf-cancel').onclick = closeModal;
   const monthlyCheckbox = backdrop.querySelector('#sf-monthly');
-  monthlyCheckbox.addEventListener('change', () => {
-    backdrop.querySelector('#sf-monthly-value-wrap').classList.toggle('hidden', !monthlyCheckbox.checked);
-  });
 
   backdrop.querySelector('#student-form').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -62,7 +55,6 @@ function studentFormModal(existing, onSaved) {
       guardian_name: backdrop.querySelector('#sf-guardian').value.trim(),
       guardian_phone: backdrop.querySelector('#sf-guardian-phone').value.trim(),
       monthly_payment: monthlyCheckbox.checked,
-      monthly_value: monthlyCheckbox.checked ? Number(backdrop.querySelector('#sf-monthly-value').value || 0) : null,
     };
     try {
       const saved = existing ? await api.put(`/api/students/${existing.id}`, payload) : await api.post('/api/students', payload);
@@ -117,7 +109,7 @@ Pages.studentsList = async function (root, opts) {
               <td><strong>${escapeHtml(s.name)}</strong></td>
               <td>${escapeHtml(s.guardian_name || '—')}</td>
               <td>${escapeHtml(s.phone || s.guardian_phone || '—')}</td>
-              <td>${s.monthly_payment ? `<span class="badge badge-pending">Mensal · ${formatCurrency(s.monthly_value)}</span>` : `<span class="badge badge-neutral">Por aula</span>`}</td>
+              <td>${s.monthly_payment ? `<span class="badge badge-pending">Mensal</span>` : `<span class="badge badge-neutral">Por aula</span>`}</td>
             </tr>
           `).join('')}
         </tbody>
@@ -137,7 +129,7 @@ Pages.studentDetail = async function (root, id) {
   root.innerHTML = `
     <div class="page-header">
       <div><div class="eyebrow">Aluno</div><h1>${escapeHtml(student.name)}</h1>
-        <p class="subtitle">${student.monthly_payment ? `Pagamento mensal · ${formatCurrency(student.monthly_value)}` : 'Pagamento por aula'}</p></div>
+        <p class="subtitle">${student.monthly_payment ? `Pagamento mensal <a href="#/pagamentos">(definir valor do mês em Pagamentos)</a>` : 'Pagamento por aula'}</p></div>
       <div class="flex gap-10">
         <a href="#/alunos" class="btn btn-outline">&larr; Voltar</a>
         <button class="btn btn-danger" id="delete-student-btn">Remover</button>

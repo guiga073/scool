@@ -471,6 +471,42 @@ td.num, th.num { text-align: right; }
 .year-month-card .m-name { font-family: var(--font-display); font-weight: 600; font-size: 15px; }
 .year-month-card .m-count { color: var(--ink-soft); font-size: 12.5px; margin-top: 4px; }
 
+/* ---------- Grade de disponibilidade ---------- */
+
+.avail-grid-wrap { overflow-x: auto; }
+table.avail-grid { border-collapse: collapse; font-size: 12px; }
+table.avail-grid th, table.avail-grid td {
+  border: 1px solid var(--border);
+  padding: 0;
+  text-align: center;
+}
+table.avail-grid thead th {
+  padding: 6px 4px;
+  font-size: 11px;
+  color: var(--ink-soft);
+  background: var(--surface-sunken);
+  min-width: 40px;
+}
+table.avail-grid tbody th {
+  padding: 5px 8px;
+  font-size: 11px;
+  color: var(--ink-soft);
+  background: var(--surface-sunken);
+  white-space: nowrap;
+  font-weight: 600;
+}
+table.avail-grid td {
+  width: 40px;
+  height: 26px;
+  cursor: pointer;
+  background: #fff;
+}
+table.avail-grid td:hover { background: var(--accent-tint); }
+table.avail-grid td.avail-on { background: var(--primary); }
+table.avail-grid td.avail-on:hover { background: var(--primary-soft); }
+.avail-clickable { cursor: pointer; }
+.avail-clickable:hover { background: var(--accent-tint) !important; color: var(--ink); }
+
 /* ---------- Login ---------- */
 
 .login-screen {

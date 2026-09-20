@@ -2,6 +2,7 @@
 const { db } = require('../db');
 const { sendJson, httpError } = require('../router');
 const { requireAuth } = require('./auth');
+const { hashPassword } = require('../auth');
 const svc = require('../services');
 
 function getTeacherSubjects(teacherId) {
@@ -19,8 +20,23 @@ function setTeacherSubjects(teacherId, subjectIds) {
   for (const sid of subjectIds || []) insert.run(teacherId, sid);
 }
 
+function parseGrid(raw) {
+  if (!raw) return {};
+  try { return JSON.parse(raw); } catch (e) { return {}; }
+}
+
 function teacherToJson(row) {
-  return { ...row, active: !!row.active, subjects: getTeacherSubjects(row.id) };
+  const { password_hash, availability_grid, ...rest } = row;
+  return { ...rest, active: !!row.active, has_login: !!row.login_email, availability_grid: parseGrid(availability_grid), subjects: getTeacherSubjects(row.id) };
+}
+
+// Garante que o e-mail de acesso não colida com um admin nem com outro professor.
+function assertLoginEmailAvailable(email, excludeTeacherId) {
+  if (!email) return;
+  const asAdmin = db.prepare('SELECT id FROM admins WHERE email = ?').get(email);
+  if (asAdmin) throw httpError(400, 'Este e-mail já está em uso por uma conta de administração');
+  const asTeacher = db.prepare('SELECT id FROM teachers WHERE login_email = ? AND id != ?').get(email, excludeTeacherId || 0);
+  if (asTeacher) throw httpError(400, 'Este e-mail já está em uso por outro professor');
 }
 
 function register(router) {
@@ -38,9 +54,18 @@ function register(router) {
     requireAuth(req);
     const b = req.body;
     if (!b.name || !b.name.trim()) throw httpError(400, 'Nome do professor é obrigatório');
+    const loginEmail = b.login_email ? String(b.login_email).trim().toLowerCase() : null;
+    assertLoginEmailAvailable(loginEmail, null);
+    if (loginEmail && !b.login_password) throw httpError(400, 'Defina uma senha de acesso para o professor');
+
     const info = db.prepare(`
-      INSERT INTO teachers (name, address, phone, pix, availability) VALUES (?, ?, ?, ?, ?)
-    `).run(b.name.trim(), b.address || null, b.phone || null, b.pix || null, b.availability || null);
+      INSERT INTO teachers (name, address, phone, pix, availability, availability_grid, login_email, password_hash)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      b.name.trim(), b.address || null, b.phone || null, b.pix || null, b.availability || null,
+      b.availability_grid ? JSON.stringify(b.availability_grid) : null,
+      loginEmail, b.login_password ? hashPassword(b.login_password) : null
+    );
     setTeacherSubjects(info.lastInsertRowid, b.subject_ids);
     const row = db.prepare('SELECT * FROM teachers WHERE id = ?').get(info.lastInsertRowid);
     sendJson(res, 201, teacherToJson(row));
@@ -85,9 +110,29 @@ function register(router) {
     const existing = db.prepare('SELECT * FROM teachers WHERE id = ?').get(req.params.id);
     if (!existing) throw httpError(404, 'Professor não encontrado');
     if (!b.name || !b.name.trim()) throw httpError(400, 'Nome do professor é obrigatório');
+
+    const loginEmail = b.login_email ? String(b.login_email).trim().toLowerCase() : null;
+    assertLoginEmailAvailable(loginEmail, existing.id);
+    // Mantém a senha atual se nenhuma nova senha for enviada; só exige senha se está
+    // ativando o acesso agora (não tinha e-mail de login antes) ou trocando o e-mail.
+    let passwordHash = existing.password_hash;
+    if (b.login_password) {
+      passwordHash = hashPassword(b.login_password);
+    } else if (loginEmail && loginEmail !== existing.login_email) {
+      throw httpError(400, 'Defina uma senha de acesso para o professor');
+    } else if (!loginEmail) {
+      passwordHash = null;
+    }
+
     db.prepare(`
-      UPDATE teachers SET name=?, address=?, phone=?, pix=?, availability=? WHERE id=?
-    `).run(b.name.trim(), b.address || null, b.phone || null, b.pix || null, b.availability || null, req.params.id);
+      UPDATE teachers SET name=?, address=?, phone=?, pix=?, availability=?, availability_grid=?,
+        login_email=?, password_hash=?
+      WHERE id=?
+    `).run(
+      b.name.trim(), b.address || null, b.phone || null, b.pix || null, b.availability || null,
+      b.availability_grid ? JSON.stringify(b.availability_grid) : existing.availability_grid,
+      loginEmail, passwordHash, req.params.id
+    );
     setTeacherSubjects(req.params.id, b.subject_ids);
     const row = db.prepare('SELECT * FROM teachers WHERE id = ?').get(req.params.id);
     sendJson(res, 200, teacherToJson(row));

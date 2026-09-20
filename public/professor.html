@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Área do Professor — Sistema de Reforço Escolar</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="topbar" style="display:flex; position:sticky; top:0;">
+    <svg class="brand-mark" width="26" height="26" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M6 10c0-2.2 1.8-4 4-4h9v28h-9c-2.2 0-4-1.8-4-4V10z" fill="#EAF1EE"/>
+      <path d="M34 10c0-2.2-1.8-4-4-4h-9v28h9c2.2 0 4-1.8 4-4V10z" fill="#B9CBC5"/>
+      <path d="M17 8v24" stroke="#D9A441" stroke-width="1.5"/>
+    </svg>
+    <div class="brand-name" style="font-size:15px;">Área do Professor</div>
+    <button id="logout-btn" style="background:none;border:none;color:#fff;cursor:pointer;font-size:13px;text-decoration:underline;">Sair</button>
+  </div>
+
+  <div class="page-content" style="max-width:900px; margin:0 auto;" id="page-root">
+    <div class="loading-dots">Carregando…</div>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/calendar.js"></script>
+  <script src="/js/availability-grid.js"></script>
+  <script src="/js/professor-app.js"></script>
+</body>
+</html>

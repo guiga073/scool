@@ -117,7 +117,7 @@ Pages.payments = async function (root) {
     body.innerHTML = `
       <div class="card">
         <div class="card-header"><h2>Pagamentos especiais (mensalistas)</h2><span class="badge badge-pending tabular">${formatCurrency(total)} pendente</span></div>
-        <p class="text-sm muted mt-0">Alunos com pagamento mensal marcado no cadastro. As aulas deles continuam no calendário normalmente, mas entram aqui em vez de na lista por aula.</p>
+        <p class="text-sm muted mt-0">Alunos com pagamento mensal marcado no cadastro. As aulas deles continuam no calendário normalmente, mas entram aqui em vez de na lista por aula. Toda mensalidade começa em R$ 0,00 — defina o valor de cada mês clicando em "Definir valor".</p>
         ${rows.length === 0 ? `<div class="empty-state">Nenhuma mensalidade pendente.</div>` : `
         <div class="table-wrap"><table>
           <thead><tr><th>Aluno</th><th>Referência</th><th class="num">Valor mensal</th><th></th></tr></thead>
@@ -126,7 +126,10 @@ Pages.payments = async function (root) {
               <td><a href="#/alunos/${r.student_id}">${escapeHtml(r.student_name)}</a></td>
               <td>${pad2(r.month)}/${r.year}</td>
               <td class="num tabular">${formatCurrency(r.value)}</td>
-              <td><button class="btn btn-outline btn-sm" data-mark="${r.id}">Marcar recebido</button></td>
+              <td class="flex gap-8">
+                <button class="btn btn-outline btn-sm" data-edit="${r.id}" data-current="${r.value}">${Number(r.value) > 0 ? 'Editar valor' : 'Definir valor'}</button>
+                <button class="btn btn-outline btn-sm" data-mark="${r.id}">Marcar recebido</button>
+              </td>
             </tr>`).join('')}</tbody>
         </table></div>`}
       </div>
@@ -136,6 +139,28 @@ Pages.payments = async function (root) {
         await api.post(`/api/payments/monthly-charge/${btn.dataset.mark}/mark-paid`);
         showToast('Mensalidade marcada como recebida.');
         renderEspeciais(body);
+      });
+    });
+    body.querySelectorAll('[data-edit]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const chargeId = btn.dataset.edit;
+        const backdrop = openModal(`
+          <div class="modal-header"><h3>Valor da mensalidade</h3><button class="modal-close" id="mv-close">&times;</button></div>
+          <form id="monthly-value-form">
+            <div class="field"><label for="mv-value">Valor (R$)</label>
+              <input type="number" step="0.01" min="0" id="mv-value" value="${btn.dataset.current}" required autofocus></div>
+            <div class="form-actions"><button type="button" class="btn btn-outline" id="mv-cancel">Cancelar</button><button type="submit" class="btn btn-primary">Salvar</button></div>
+          </form>
+        `);
+        backdrop.querySelector('#mv-close').onclick = closeModal;
+        backdrop.querySelector('#mv-cancel').onclick = closeModal;
+        backdrop.querySelector('#monthly-value-form').addEventListener('submit', async (e) => {
+          e.preventDefault();
+          await api.put(`/api/payments/monthly-charge/${chargeId}`, { value: Number(backdrop.querySelector('#mv-value').value) });
+          closeModal();
+          showToast('Valor atualizado.');
+          renderEspeciais(body);
+        });
       });
     });
   }

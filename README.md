@@ -89,6 +89,35 @@ importante e mais fácil de esquecer.
    `DATA_DIR`).
 3. A Railway reinicia o serviço automaticamente depois de anexar o volume.
 
+**Como isso se comporta quando você dá um novo `git push`:** o Volume é um disco à
+parte, ligado ao *serviço*, não a uma versão específica do código. Quando você sobe um
+commit novo, a Railway constrói um container novo com o código atualizado, liga esse
+container novo já com o **mesmo** Volume montado em `/data`, e só depois desliga o
+container antigo — o arquivo `sistema.db` nunca é recriado nem tocado por esse processo,
+então os dados de quem já estava usando o sistema continuam lá. Isso é o comportamento
+oficial e documentado da Railway, e é exatamente por isso que o passo do Volume importa
+tanto: sem ele, cada novo commit realmente apagaria tudo, porque o container roda em um
+disco temporário por padrão.
+
+Duas coisas para não deixar passar:
+- **Confirme que o Volume existe de verdade**: na aba do serviço na Railway, você deve
+  ver o Volume listado (nome, tamanho usado) — se não aparecer nada ali, ele não foi
+  criado corretamente e os dados não vão persistir.
+- **Teste uma vez, na prática**: depois de configurar tudo, cadastre um aluno de teste,
+  dê um `git push` de qualquer mudança pequena (ou clique em "Redeploy" no painel), e
+  confira se o aluno de teste continua lá depois. Isso confirma que está tudo certo para
+  o seu caso específico — plataformas de nuvem, de vez em quando, têm casos isolados
+  onde isso não funciona como esperado (geralmente por permissão de arquivo), então vale
+  mais confiar numa checagem real do que só na teoria. Se o servidor cair logo depois de
+  subir com algum erro de permissão negada ao gravar em `/data`, adicione a variável de
+  ambiente `RAILWAY_RUN_UID=0` no serviço — isso resolve um problema conhecido de
+  permissão entre o Volume (que monta como usuário root) e imagens que rodam com outro
+  usuário.
+- **Ative os backups automáticos da Railway** como uma segunda camada de segurança: na
+  aba **Settings** do serviço → **Backups**, dá para ligar backup diário/semanal/mensal
+  do Volume com um clique — é a forma mais simples de conseguir restaurar os dados caso
+  algo dê errado (seja um erro seu, seja algo da plataforma).
+
 **e) Gere o endereço público**
 1. Na aba **Settings** do serviço, em **Networking**, clique em **Generate Domain**.
 2. Você vai receber um endereço do tipo `seu-projeto.up.railway.app` — é esse o link
@@ -119,9 +148,12 @@ considerar o plano pago caso note lentidão.
 - **Guarde a URL** em um lugar de fácil acesso para você e sua equipe (favoritos do
   navegador, por exemplo).
 - **Faça login** com o e-mail/senha definidos nas variáveis de ambiente.
-- **Backups**: os dados moram no volume, mas é uma boa prática baixar uma cópia de
-  segurança de vez em quando. A forma mais simples é, dentro do painel da Railway,
-  abrir um terminal do serviço (Shell) e copiar o arquivo `data/sistema.db`.
+- **Backups**: os dados moram no volume, e o mais simples é ligar os backups automáticos
+  da própria Railway (Settings do serviço → aba **Backups** → escolher diário/semanal/
+  mensal) — cobre justamente esse caso (arquivo SQLite dentro de um Volume) e permite
+  restaurar pelo próprio painel se algo der errado. Para uma cópia rápida e manual na
+  hora, dá também para abrir um terminal do serviço (Shell) e copiar o arquivo
+  `data/sistema.db`.
 
 ---
 
@@ -130,10 +162,20 @@ considerar o plano pago caso note lentidão.
 - **Alunos** — cadastro completo (nome, endereço, responsáveis, telefone). A caixa
   "Pagamento mensal" faz o aluno aparecer em **Pagamentos → Pagamentos especiais** em
   vez de na lista de cobrança por aula — as aulas dele continuam no calendário
-  normalmente. Na ficha do aluno: dados, calendário de aulas, notas e observações.
-- **Professores** — cadastro com disciplinas, PIX e disponibilidade (esta última é só
-  uma anotação; não bloqueia nem avisa nada no agendamento, como pedido). Na ficha do
-  professor: calendário de aulas e o total de horas/valor de cada quinzena.
+  normalmente. O valor da mensalidade **não** é definido no cadastro: toda mensalidade
+  nasce com R$ 0,00 e você define/edita o valor de cada mês diretamente em Pagamentos →
+  Pagamentos especiais (clique em "Definir valor"). Na ficha do aluno: dados, calendário
+  de aulas, notas e observações.
+- **Professores** — cadastro com disciplinas e PIX. Também é possível dar a cada
+  professor um **login próprio** (e-mail + senha, preenchidos por você no cadastro):
+  com ele, o professor entra pelo mesmo endereço do site e cai numa área só dele
+  (`/professor.html`), onde vê o valor a receber na quinzena atual (que atualiza sozinho
+  conforme você agenda aulas para ele), o histórico de faturas, as próprias aulas
+  marcadas, e preenche a própria disponibilidade. A disponibilidade é uma grade de
+  Segunda a Domingo, das 8h às 20h — o professor (ou você, pelo cadastro dele) marca os
+  horários livres clicando nos quadradinhos. Isso é só uma anotação; como pedido, não
+  bloqueia nem avisa nada no agendamento. Na ficha do professor (lado da secretaria):
+  dados, disponibilidade, calendário de aulas e o total de horas/valor de cada quinzena.
 - **Agendamento** — ao marcar uma aula você escolhe aluno → modalidade → disciplina →
   professor (a lista de professores já vem filtrada pela disciplina escolhida) → data e
   horário → valores → link da aula. Há também uma opção de aula recorrente semanal
@@ -172,10 +214,14 @@ o resto do sistema.
   depois atualize manualmente a coluna `password_hash` da tabela `admins` com esse
   valor (dá para abrir o `sistema.db` com qualquer cliente SQLite). É um processo
   manual porque, de propósito, não existe uma tela de "esqueci minha senha" que
-  dependeria de configurar envio de e-mails.
-- **Quero adicionar uma segunda pessoa com login próprio** — hoje o sistema foi
-  pensado para um único acesso de administração (como descrito no pedido original,
-  "sistema interno"). Dá para cadastrar outra conta manualmente inserindo uma linha na
+  dependeria de configurar envio de e-mails. Para um **professor** que esqueceu a
+  senha, é mais simples: edite o cadastro dele (Professores → abrir o professor →
+  Editar) e defina uma nova senha no campo de acesso.
+- **Quero adicionar uma segunda pessoa com login de administração** — hoje o sistema
+  foi pensado para um único acesso de administração (como descrito no pedido original,
+  "sistema interno"); isso é diferente do login dos professores, que já é multiusuário
+  (cada professor tem o próprio, cadastrado por você). Para uma segunda pessoa
+  administrando tudo, dá para cadastrar outra conta manualmente inserindo uma linha na
   tabela `admins` (mesmo processo de hash de senha do item acima); se isso for algo que
   você vai precisar com frequência, vale pedir para transformar isso em uma tela.
 

@@ -24,13 +24,6 @@ CREATE TABLE IF NOT EXISTS admins (
   created_at TEXT DEFAULT (datetime('now'))
 );
 
-CREATE TABLE IF NOT EXISTS sessions (
-  token TEXT PRIMARY KEY,
-  admin_id INTEGER NOT NULL REFERENCES admins(id) ON DELETE CASCADE,
-  created_at TEXT DEFAULT (datetime('now')),
-  expires_at TEXT NOT NULL
-);
-
 CREATE TABLE IF NOT EXISTS students (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL,
@@ -69,6 +62,9 @@ CREATE TABLE IF NOT EXISTS teachers (
   phone TEXT,
   pix TEXT,
   availability TEXT,
+  availability_grid TEXT,
+  login_email TEXT,
+  password_hash TEXT,
   active INTEGER NOT NULL DEFAULT 1,
   created_at TEXT DEFAULT (datetime('now'))
 );
@@ -144,11 +140,49 @@ CREATE TABLE IF NOT EXISTS expenses (
 );
 `);
 
-// Seed default subjects, only if the table is empty
-const subjectCount = db.prepare('SELECT COUNT(*) AS c FROM subjects').get().c;
-if (subjectCount === 0) {
-  const insertSubject = db.prepare('INSERT INTO subjects (name) VALUES (?)');
-  const defaults = ['Matemática', 'Português', 'Ciências', 'História', 'Geografia', 'Inglês', 'Física', 'Química', 'Biologia', 'Redação'];
+// Migração leve: adiciona colunas novas em bancos que já existiam antes desta versão
+// (não apaga nada — só garante que a coluna exista antes de ser usada).
+function ensureColumn(table, column, definition) {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all();
+  if (!cols.some((c) => c.name === column)) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+  }
+}
+ensureColumn('teachers', 'availability_grid', 'TEXT');
+ensureColumn('teachers', 'login_email', 'TEXT');
+ensureColumn('teachers', 'password_hash', 'TEXT');
+
+// A tabela de sessões mudou de "sempre admin" (admin_id) para "admin ou professor"
+// (user_type + user_id). Sessões são só tokens de login temporários — se o formato
+// antigo for encontrado, é mais simples recriar a tabela (todo mundo só precisa
+// entrar de novo uma vez) do que tentar migrar linha por linha.
+const sessionCols = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='sessions'").all();
+if (sessionCols.length > 0) {
+  const cols = db.prepare('PRAGMA table_info(sessions)').all();
+  if (!cols.some((c) => c.name === 'user_type')) {
+    db.exec('DROP TABLE sessions');
+  }
+}
+db.exec(`
+CREATE TABLE IF NOT EXISTS sessions (
+  token TEXT PRIMARY KEY,
+  user_type TEXT NOT NULL,
+  user_id INTEGER NOT NULL,
+  created_at TEXT DEFAULT (datetime('now')),
+  expires_at TEXT NOT NULL
+);
+`);
+
+// Disciplinas padrão: roda sempre (não só na primeira vez), usando "ignora se já existir",
+// para que novas disciplinas adicionadas aqui no futuro apareçam também em instalações
+// que já estavam em uso — sem duplicar as que a pessoa já tinha.
+{
+  const insertSubject = db.prepare('INSERT OR IGNORE INTO subjects (name) VALUES (?)');
+  const defaults = [
+    'Matemática', 'Português', 'Ciências', 'História', 'Geografia', 'Inglês',
+    'Física', 'Química', 'Biologia', 'Redação', 'Artes', 'Literatura',
+    'Alemão', 'Espanhol', 'Desenho',
+  ];
   for (const s of defaults) insertSubject.run(s);
 }
 
