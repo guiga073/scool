@@ -187,6 +187,35 @@ function buildRecurringOccurrences({ dayOfWeek, startTime, endTime, startDate, e
   return occurrences;
 }
 
+// ---------- Feedback de aula (professor -> aluno) ----------
+
+// Um professor só pode ver/adicionar feedback de alunos com quem ele realmente já teve aula.
+function teacherHasStudent(db, teacherId, studentId) {
+  const row = db.prepare(
+    `SELECT 1 FROM classes WHERE teacher_id = ? AND student_id = ? AND status = 'scheduled' LIMIT 1`
+  ).get(teacherId, studentId);
+  return !!row;
+}
+
+function listFeedback(db, teacherId, studentId) {
+  return db.prepare(
+    `SELECT * FROM class_feedback WHERE teacher_id = ? AND student_id = ? ORDER BY date DESC, id DESC`
+  ).all(teacherId, studentId);
+}
+
+function addFeedback(db, teacherId, studentId, date, feedback) {
+  const info = db.prepare(
+    'INSERT INTO class_feedback (student_id, teacher_id, date, feedback) VALUES (?, ?, ?, ?)'
+  ).run(studentId, teacherId, date, feedback);
+  return db.prepare('SELECT * FROM class_feedback WHERE id = ?').get(info.lastInsertRowid);
+}
+
+function deleteFeedback(db, teacherId, studentId, feedbackId) {
+  db.prepare(
+    'DELETE FROM class_feedback WHERE id = ? AND teacher_id = ? AND student_id = ?'
+  ).run(feedbackId, teacherId, studentId);
+}
+
 module.exports = {
   getQuinzenaPeriods,
   quinzenaForDate,
@@ -198,4 +227,8 @@ module.exports = {
   runPeriodicChecks,
   buildRecurringOccurrences,
   round2,
+  teacherHasStudent,
+  listFeedback,
+  addFeedback,
+  deleteFeedback,
 };

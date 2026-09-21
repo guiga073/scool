@@ -1,5 +1,5 @@
 {
-  "name": "sistema-reforco-escolar",
+  "name": "olimais",
   "version": "1.0.0",
   "description": "Sistema interno de gestao para reforco escolar: alunos, professores, agendamento e pagamentos.",
   "main": "server/index.js",

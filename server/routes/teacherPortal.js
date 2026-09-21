@@ -73,6 +73,28 @@ function register(router) {
       invoices,
     });
   });
+
+  // ---- Feedback dos alunos que este professor acompanha ----
+
+  router.get('/api/teacher-portal/students/:studentId/feedback', async (req, res) => {
+    const me = requireTeacherAuth(req);
+    if (!svc.teacherHasStudent(db, me.id, req.params.studentId)) throw httpError(403, 'Este aluno não está entre os seus');
+    sendJson(res, 200, svc.listFeedback(db, me.id, req.params.studentId));
+  });
+
+  router.post('/api/teacher-portal/students/:studentId/feedback', async (req, res) => {
+    const me = requireTeacherAuth(req);
+    if (!svc.teacherHasStudent(db, me.id, req.params.studentId)) throw httpError(403, 'Este aluno não está entre os seus');
+    const { date, feedback } = req.body || {};
+    if (!date || !feedback || !feedback.trim()) throw httpError(400, 'Data e feedback são obrigatórios');
+    sendJson(res, 201, svc.addFeedback(db, me.id, req.params.studentId, date, feedback.trim()));
+  });
+
+  router.delete('/api/teacher-portal/students/:studentId/feedback/:feedbackId', async (req, res) => {
+    const me = requireTeacherAuth(req);
+    svc.deleteFeedback(db, me.id, req.params.studentId, req.params.feedbackId);
+    sendJson(res, 200, { ok: true });
+  });
 }
 
 module.exports = { register };

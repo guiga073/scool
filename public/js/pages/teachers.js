@@ -164,6 +164,7 @@ Pages.teacherDetail = async function (root, id) {
     </div>
     <div class="tabs">
       <button class="tab-btn active" data-tab="dados">Dados</button>
+      <button class="tab-btn" data-tab="alunos">Alunos e feedback</button>
       <button class="tab-btn" data-tab="disponibilidade">Disponibilidade</button>
       <button class="tab-btn" data-tab="calendario">Calendário de aulas</button>
       <button class="tab-btn" data-tab="quinzenas">Horas e quinzenas</button>
@@ -191,6 +192,7 @@ Pages.teacherDetail = async function (root, id) {
   function renderTab() {
     const el = document.getElementById('tab-content');
     if (activeTab === 'dados') renderDados(el);
+    else if (activeTab === 'alunos') renderAlunos(el);
     else if (activeTab === 'disponibilidade') renderDisponibilidade(el);
     else if (activeTab === 'calendario') renderCalendario(el);
     else if (activeTab === 'quinzenas') renderQuinzenas(el);
@@ -213,6 +215,18 @@ Pages.teacherDetail = async function (root, id) {
     document.getElementById('edit-teacher-btn').addEventListener('click', () => {
       teacherFormModal(teacher, () => Pages.teacherDetail(root, id));
     });
+  }
+
+  function renderAlunos(el) {
+    const map = new Map();
+    for (const c of teacher.classes) if (!map.has(c.student_id)) map.set(c.student_id, { id: c.student_id, name: c.student_name });
+    const students = Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+    el.innerHTML = `<div class="card"><div id="admin-alunos-panel"></div></div>`;
+    FeedbackPanel.renderStudentList(
+      document.getElementById('admin-alunos-panel'),
+      students,
+      (studentId) => `/api/teachers/${id}/students/${studentId}`
+    );
   }
 
   function renderDisponibilidade(el) {

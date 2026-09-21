@@ -53,7 +53,7 @@ setInterval(() => {
 }, 15 * 60 * 1000);
 
 server.listen(PORT, () => {
-  console.log(`Sistema de reforço escolar rodando em http://localhost:${PORT}`);
+  console.log(`Olimais rodando em http://localhost:${PORT}`);
   console.log(`Fuso horário do servidor: ${process.env.TZ}`);
 });
 

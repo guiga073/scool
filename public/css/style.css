@@ -1,25 +1,25 @@
 /* public/css/style.css
-   Sistema de Reforço Escolar — design system
-   Conceito: "caderno de professor" — verde-quadro, giz dourado, caneta azul (confirmado)
-   e caneta vermelha (conflito/pendência), sobre papel claro.
+   Olimais — design system
+   Conceito: identidade dourado + preto da marca (dois balões de diálogo dourados,
+   evocando a conversa entre professor e aluno), sobre papel marfim claro.
 */
 
 @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap');
 
 :root {
-  --bg: #F3F4EF;
+  --bg: #FFFAF0;
   --surface: #FFFFFF;
-  --surface-sunken: #ECEEE7;
-  --ink: #1E2A28;
-  --ink-soft: #5B6B66;
-  --ink-faint: #8A9793;
+  --surface-sunken: #F5EEDC;
+  --ink: #141414;
+  --ink-soft: #6B6355;
+  --ink-faint: #9C9484;
 
-  --primary: #1F4A42;
-  --primary-soft: #2E6358;
-  --primary-tint: #E4ECE9;
+  --primary: #141414;
+  --primary-soft: #2B2B2B;
+  --primary-tint: #ECE7DA;
 
-  --accent: #D9A441;
-  --accent-tint: #F7EBD2;
+  --accent: #FFC000;
+  --accent-tint: #FDEFCB;
 
   --confirmed: #3B6FA0;
   --confirmed-tint: #E3ECF4;
@@ -27,15 +27,15 @@
   --danger: #B84C3E;
   --danger-tint: #F5E3E0;
 
-  --border: #DDDFD6;
-  --border-strong: #C7CBC0;
+  --border: #E9E1CB;
+  --border-strong: #D8CCA6;
 
   --radius-s: 6px;
   --radius-m: 10px;
   --radius-l: 16px;
 
-  --shadow-card: 0 1px 2px rgba(30, 42, 40, 0.06), 0 4px 16px rgba(30, 42, 40, 0.05);
-  --shadow-pop: 0 8px 30px rgba(30, 42, 40, 0.16);
+  --shadow-card: 0 1px 2px rgba(20, 20, 20, 0.06), 0 4px 16px rgba(20, 20, 20, 0.06);
+  --shadow-pop: 0 8px 30px rgba(20, 20, 20, 0.22);
 
   --font-display: 'Fraunces', Georgia, serif;
   --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -97,7 +97,7 @@ button, input, select, textarea { font-family: inherit; font-size: inherit; colo
   width: var(--sidebar-w);
   flex-shrink: 0;
   background: var(--primary);
-  color: #EAF1EE;
+  color: #F2ECDC;
   display: flex;
   flex-direction: column;
   position: fixed;
@@ -125,7 +125,7 @@ button, input, select, textarea { font-family: inherit; font-size: inherit; colo
   line-height: 1.15;
   color: #fff;
 }
-.brand-name small { display: block; font-family: var(--font-body); font-weight: 400; font-size: 11px; color: #B9CBC5; letter-spacing: 0.02em; }
+.brand-name small { display: block; font-family: var(--font-body); font-weight: 400; font-size: 11px; color: #B8AE97; letter-spacing: 0.02em; }
 
 .nav-list {
   list-style: none;
@@ -140,7 +140,7 @@ button, input, select, textarea { font-family: inherit; font-size: inherit; colo
   gap: 10px;
   padding: 10px 12px;
   border-radius: var(--radius-s);
-  color: #CFE0DA;
+  color: #D9D0BA;
   text-decoration: none;
   font-size: 14px;
   font-weight: 500;
@@ -149,7 +149,7 @@ button, input, select, textarea { font-family: inherit; font-size: inherit; colo
 }
 .nav-item a:hover { background: rgba(255,255,255,0.07); color: #fff; }
 .nav-item.active a {
-  background: rgba(217, 164, 65, 0.16);
+  background: rgba(255, 192, 0, 0.18);
   color: #fff;
   border-left-color: var(--accent);
 }
@@ -159,10 +159,10 @@ button, input, select, textarea { font-family: inherit; font-size: inherit; colo
   padding: 14px 20px 20px 20px;
   border-top: 1px solid rgba(234, 241, 238, 0.14);
   font-size: 12.5px;
-  color: #AEC2BC;
+  color: #A79E89;
 }
 .sidebar-footer button {
-  background: none; border: none; color: #CFE0DA; cursor: pointer;
+  background: none; border: none; color: #D9D0BA; cursor: pointer;
   font-size: 12.5px; padding: 0; margin-top: 6px; text-decoration: underline;
 }
 
@@ -512,8 +512,8 @@ table.avail-grid td.avail-on:hover { background: var(--primary-soft); }
 .login-screen {
   min-height: 100vh; display: flex; align-items: center; justify-content: center;
   background: var(--primary);
-  background-image: radial-gradient(circle at 15% 20%, rgba(217,164,65,0.14), transparent 45%),
-                     radial-gradient(circle at 85% 85%, rgba(217,164,65,0.10), transparent 45%);
+  background-image: radial-gradient(circle at 15% 20%, rgba(255,192,0,0.16), transparent 45%),
+                     radial-gradient(circle at 85% 85%, rgba(255,192,0,0.10), transparent 45%);
   padding: 20px;
 }
 .login-card {

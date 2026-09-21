@@ -129,6 +129,17 @@ CREATE TABLE IF NOT EXISTS monthly_charges (
   UNIQUE(student_id, month, year)
 );
 
+CREATE TABLE IF NOT EXISTS class_feedback (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  student_id INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+  teacher_id INTEGER NOT NULL REFERENCES teachers(id) ON DELETE CASCADE,
+  date TEXT NOT NULL,
+  feedback TEXT NOT NULL,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_feedback_teacher_student ON class_feedback(teacher_id, student_id);
+
 CREATE TABLE IF NOT EXISTS expenses (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   description TEXT NOT NULL,

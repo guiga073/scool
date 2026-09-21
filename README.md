@@ -1,4 +1,4 @@
-# Sistema de Reforço Escolar
+# Olimais — Sistema de Gestão
 
 Sistema interno de gestão para o seu reforço escolar: cadastro de alunos e professores,
 agendamento de aulas com calendário, e controle de pagamentos (a receber dos alunos e a
@@ -171,11 +171,17 @@ considerar o plano pago caso note lentidão.
   com ele, o professor entra pelo mesmo endereço do site e cai numa área só dele
   (`/professor.html`), onde vê o valor a receber na quinzena atual (que atualiza sozinho
   conforme você agenda aulas para ele), o histórico de faturas, as próprias aulas
-  marcadas, e preenche a própria disponibilidade. A disponibilidade é uma grade de
-  Segunda a Domingo, das 8h às 20h — o professor (ou você, pelo cadastro dele) marca os
-  horários livres clicando nos quadradinhos. Isso é só uma anotação; como pedido, não
-  bloqueia nem avisa nada no agendamento. Na ficha do professor (lado da secretaria):
-  dados, disponibilidade, calendário de aulas e o total de horas/valor de cada quinzena.
+  marcadas, preenche a própria disponibilidade, e registra **feedback de aula** para
+  cada aluno que ele dá aula (aba "Alunos" → escolhe o aluno → "Adicionar feedback",
+  preenchendo data e o texto). Um botão "Ver como texto" reúne todo o histórico de
+  feedback daquele aluno num bloco de texto simples (Data / Feedback, um embaixo do
+  outro) pronto para copiar e mandar para o responsável, por exemplo. Você, pela ficha
+  do professor (aba "Alunos e feedback"), vê e também pode lançar esse mesmo feedback
+  em nome dele. A disponibilidade é uma grade de Segunda a Domingo, das 8h às 20h — o
+  professor (ou você, pelo cadastro dele) marca os horários livres clicando nos
+  quadradinhos. Isso é só uma anotação; como pedido, não bloqueia nem avisa nada no
+  agendamento. Na ficha do professor (lado da secretaria): dados, alunos e feedback,
+  disponibilidade, calendário de aulas e o total de horas/valor de cada quinzena.
 - **Agendamento** — ao marcar uma aula você escolhe aluno → modalidade → disciplina →
   professor (a lista de professores já vem filtrada pela disciplina escolhida) → data e
   horário → valores → link da aula. Há também uma opção de aula recorrente semanal
@@ -238,8 +244,17 @@ server/           todo o backend (servidor, banco de dados, regras de negócio, 
   routes/            um arquivo por área (alunos, professores, agendamento, pagamentos)
   index.js           ponto de entrada — inicia o servidor
 public/            todo o frontend (HTML/CSS/JS puro, sem build)
-  index.html         estrutura principal do site (depois do login)
+  index.html         estrutura principal do site (depois do login, para a secretaria)
   login.html         tela de login
+  professor.html     área exclusiva de cada professor logado
+  assets/            arquivos da identidade visual (ver nota abaixo)
   css/style.css      estilo visual
   js/                lógica de cada página + calendário + funções compartilhadas
 ```
+
+**Sobre a pasta `public/assets/`**: `logo-icon.svg` é a marca usada de verdade no site (sidebar,
+tela de login, favicon) — é a versão em vetor puro, leve, que fica nítida em qualquer tamanho.
+`logo-9.svg` e `logo-13.svg` são as outras duas variantes que você enviou, guardadas aqui como
+referência para uso fora do site (papelaria, redes sociais, etc.) — elas têm partes em imagem
+(não só vetor) e arquivos bem mais pesados, por isso não são as usadas no site em si. Se preferir
+usar uma delas no lugar da atual, é só me pedir.

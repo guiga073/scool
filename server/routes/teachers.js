@@ -145,6 +145,26 @@ function register(router) {
     db.prepare('UPDATE teachers SET active = 0 WHERE id = ?').run(req.params.id);
     sendJson(res, 200, { ok: true });
   });
+
+  // ---- Feedback dos alunos de um professor (visto/gerenciado pela secretaria) ----
+
+  router.get('/api/teachers/:teacherId/students/:studentId/feedback', async (req, res) => {
+    requireAuth(req);
+    sendJson(res, 200, svc.listFeedback(db, req.params.teacherId, req.params.studentId));
+  });
+
+  router.post('/api/teachers/:teacherId/students/:studentId/feedback', async (req, res) => {
+    requireAuth(req);
+    const { date, feedback } = req.body || {};
+    if (!date || !feedback || !feedback.trim()) throw httpError(400, 'Data e feedback são obrigatórios');
+    sendJson(res, 201, svc.addFeedback(db, req.params.teacherId, req.params.studentId, date, feedback.trim()));
+  });
+
+  router.delete('/api/teachers/:teacherId/students/:studentId/feedback/:feedbackId', async (req, res) => {
+    requireAuth(req);
+    svc.deleteFeedback(db, req.params.teacherId, req.params.studentId, req.params.feedbackId);
+    sendJson(res, 200, { ok: true });
+  });
 }
 
 module.exports = { register };

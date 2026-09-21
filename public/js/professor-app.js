@@ -32,6 +32,7 @@ function renderShell() {
     </div>
     <div class="tabs">
       <button class="tab-btn active" data-tab="ganhos">Meus ganhos</button>
+      <button class="tab-btn" data-tab="alunos">Alunos</button>
       <button class="tab-btn" data-tab="aulas">Minhas aulas</button>
       <button class="tab-btn" data-tab="disponibilidade">Minha disponibilidade</button>
     </div>
@@ -49,10 +50,25 @@ function renderShell() {
   function renderTab() {
     const el = document.getElementById('tab-content');
     if (activeTab === 'ganhos') renderGanhos(el);
+    else if (activeTab === 'alunos') renderAlunos(el);
     else if (activeTab === 'aulas') renderAulas(el);
     else if (activeTab === 'disponibilidade') renderDisponibilidade(el);
   }
   renderTab();
+}
+
+async function renderAlunos(el) {
+  el.innerHTML = '<div class="loading-dots">Carregando…</div>';
+  const classes = await api.get('/api/teacher-portal/classes');
+  const map = new Map();
+  for (const c of classes) if (!map.has(c.student_id)) map.set(c.student_id, { id: c.student_id, name: c.student_name });
+  const students = Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+  el.innerHTML = `<div class="card"><div id="alunos-panel"></div></div>`;
+  FeedbackPanel.renderStudentList(
+    document.getElementById('alunos-panel'),
+    students,
+    (studentId) => `/api/teacher-portal/students/${studentId}`
+  );
 }
 
 async function renderGanhos(el) {
