@@ -41,7 +41,7 @@ function register(router) {
     const me = requireTeacherAuth(req);
     const { start, end } = req.query;
     let sql = `
-      SELECT classes.*, students.name AS student_name, subjects.name AS subject_name
+      SELECT classes.*, students.name AS student_name, students.address AS student_address, subjects.name AS subject_name
       FROM classes
       JOIN students ON students.id = classes.student_id
       JOIN subjects ON subjects.id = classes.subject_id

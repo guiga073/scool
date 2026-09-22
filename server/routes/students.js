@@ -116,6 +116,20 @@ function register(router) {
     db.prepare('DELETE FROM observations WHERE id = ? AND student_id = ?').run(req.params.id, req.params.studentId);
     sendJson(res, 200, { ok: true });
   });
+
+  // Todo o feedback já dado a este aluno, de qualquer professor (para a tela
+  // "Feedbacks" do administrador, no modo "por aluno").
+  router.get('/api/students/:id/feedback', async (req, res) => {
+    requireAuth(req);
+    const rows = db.prepare(`
+      SELECT class_feedback.*, teachers.name AS teacher_name
+      FROM class_feedback
+      JOIN teachers ON teachers.id = class_feedback.teacher_id
+      WHERE class_feedback.student_id = ?
+      ORDER BY class_feedback.date DESC, class_feedback.id DESC
+    `).all(req.params.id);
+    sendJson(res, 200, rows);
+  });
 }
 
 module.exports = { register };

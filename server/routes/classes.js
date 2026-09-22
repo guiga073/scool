@@ -6,7 +6,8 @@ const { requireAuth } = require('./auth');
 const svc = require('../services');
 
 const CLASS_SELECT = `
-  SELECT classes.*, students.name AS student_name, teachers.name AS teacher_name, subjects.name AS subject_name
+  SELECT classes.*, students.name AS student_name, students.address AS student_address,
+         teachers.name AS teacher_name, subjects.name AS subject_name
   FROM classes
   JOIN students ON students.id = classes.student_id
   JOIN teachers ON teachers.id = classes.teacher_id

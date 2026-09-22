@@ -28,6 +28,7 @@ async function router() {
     else if (page === 'alunos' && id) await Pages.studentDetail(root, id);
     else if (page === 'professores' && !id) await Pages.teachersList(root);
     else if (page === 'professores' && id) await Pages.teacherDetail(root, id);
+    else if (page === 'feedbacks') await Pages.feedbacks(root);
     else if (page === 'agendamento') await Pages.scheduling(root);
     else if (page === 'pagamentos') await Pages.payments(root);
     else root.innerHTML = '<div class="empty-state"><div class="eyebrow">404</div>Página não encontrada.</div>';

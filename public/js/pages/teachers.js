@@ -109,44 +109,58 @@ async function teacherFormModal(existing, onSaved) {
   });
 }
 
-Pages.teachersList = async function (root) {
+Pages.teachersList = async function (root, opts) {
+  const search = (opts && opts.search) || '';
   root.innerHTML = `
     <div class="page-header">
       <div><div class="eyebrow">Cadastro</div><h1>Professores</h1>
         <p class="subtitle">Cadastre professores, suas disciplinas e disponibilidade.</p></div>
       <button class="btn btn-accent" id="add-teacher-btn">+ Cadastrar professor</button>
     </div>
-    <div class="card" id="teacher-list-wrap"><div class="loading-dots">Carregando…</div></div>
+    <div class="card">
+      <input type="text" class="search-input" id="teacher-search" placeholder="Buscar professor por nome…" value="${escapeHtml(search)}">
+      <div id="teacher-list-wrap" style="margin-top:16px;"><div class="loading-dots">Carregando…</div></div>
+    </div>
   `;
   document.getElementById('add-teacher-btn').addEventListener('click', () => {
     teacherFormModal(null, (created) => { location.hash = `#/professores/${created.id}`; });
   });
 
-  const teachers = await api.get('/api/teachers');
-  const wrap = document.getElementById('teacher-list-wrap');
-  if (teachers.length === 0) {
-    wrap.innerHTML = `<div class="empty-state"><div class="eyebrow">Nenhum professor</div>Cadastre o primeiro professor para começar.</div>`;
-    return;
-  }
-  wrap.innerHTML = `
-    <div class="table-wrap"><table>
-      <thead><tr><th>Nome</th><th>Disciplinas</th><th>Telefone</th><th>PIX</th><th>Acesso</th></tr></thead>
-      <tbody>
-        ${teachers.map(t => `
-          <tr class="row-link" data-id="${t.id}">
-            <td><strong>${escapeHtml(t.name)}</strong></td>
-            <td>${t.subjects.map(s => `<span class="badge badge-neutral" style="margin-right:3px;">${escapeHtml(s.name)}</span>`).join('') || '<span class="muted text-sm">—</span>'}</td>
-            <td>${escapeHtml(t.phone || '—')}</td>
-            <td>${escapeHtml(t.pix || '—')}</td>
-            <td>${t.has_login ? '<span class="badge badge-confirmed">Tem login</span>' : '<span class="badge badge-neutral">Sem login</span>'}</td>
-          </tr>
-        `).join('')}
-      </tbody>
-    </table></div>
-  `;
-  wrap.querySelectorAll('tr[data-id]').forEach(tr => {
-    tr.addEventListener('click', () => { location.hash = `#/professores/${tr.dataset.id}`; });
+  const searchInput = document.getElementById('teacher-search');
+  let debounce;
+  searchInput.addEventListener('input', () => {
+    clearTimeout(debounce);
+    debounce = setTimeout(() => loadList(searchInput.value), 250);
   });
+
+  async function loadList(q) {
+    const wrap = document.getElementById('teacher-list-wrap');
+    const teachers = await api.get(`/api/teachers${q ? '?search=' + encodeURIComponent(q) : ''}`);
+    if (teachers.length === 0) {
+      wrap.innerHTML = `<div class="empty-state"><div class="eyebrow">${q ? 'Nenhum professor' : 'Nenhum professor'}</div>${q ? 'Nenhum professor encontrado para essa busca.' : 'Cadastre o primeiro professor para começar.'}</div>`;
+      return;
+    }
+    wrap.innerHTML = `
+      <div class="table-wrap"><table>
+        <thead><tr><th>Nome</th><th>Disciplinas</th><th>Telefone</th><th>PIX</th><th>Acesso</th></tr></thead>
+        <tbody>
+          ${teachers.map(t => `
+            <tr class="row-link" data-id="${t.id}">
+              <td><strong>${escapeHtml(t.name)}</strong></td>
+              <td>${t.subjects.map(s => `<span class="badge badge-neutral" style="margin-right:3px;">${escapeHtml(s.name)}</span>`).join('') || '<span class="muted text-sm">—</span>'}</td>
+              <td>${escapeHtml(t.phone || '—')}</td>
+              <td>${escapeHtml(t.pix || '—')}</td>
+              <td>${t.has_login ? '<span class="badge badge-confirmed">Tem login</span>' : '<span class="badge badge-neutral">Sem login</span>'}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table></div>
+    `;
+    wrap.querySelectorAll('tr[data-id]').forEach(tr => {
+      tr.addEventListener('click', () => { location.hash = `#/professores/${tr.dataset.id}`; });
+    });
+  }
+  loadList(search);
 };
 
 Pages.teacherDetail = async function (root, id) {

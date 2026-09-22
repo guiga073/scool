@@ -119,7 +119,7 @@ const Calendar = {
           shown.map(c => `<span class="chip">${formatTime(c.start_time)} ${escapeHtml(c.student_name)}</span>`).join('') +
           (dayClasses.length > 3 ? `<span class="more">+${dayClasses.length - 3} mais</span>` : '');
         cell.addEventListener('click', (e) => {
-          if (dayClasses.length === 0) { onCreateAt(day); return; }
+          if (dayClasses.length === 0) { if (onCreateAt) onCreateAt(day); return; }
           Calendar._openDayList(day, dayClasses, onSelectClass, onCreateAt);
         });
         grid.appendChild(cell);
@@ -144,18 +144,21 @@ const Calendar = {
             const slot = document.createElement('div');
             slot.className = 'slot';
             slot.innerHTML = `<span class="time">${formatTime(c.start_time)}–${formatTime(c.end_time)}</span>
-              <span class="grow">${escapeHtml(c.student_name)} · ${escapeHtml(c.subject_name)} <span class="muted">com ${escapeHtml(c.teacher_name)}</span></span>
+              <span class="grow">${escapeHtml(c.student_name)} · ${escapeHtml(c.subject_name)} <span class="muted">com ${escapeHtml(c.teacher_name)}</span>
+              ${c.modality === 'presencial' ? `<br><span class="text-sm muted">📍 ${c.student_address ? escapeHtml(c.student_address) : 'endereço não cadastrado'}</span>` : ''}</span>
               <span class="badge badge-neutral">${c.modality === 'online' ? 'Online' : 'Presencial'}</span>`;
             slot.addEventListener('click', () => onSelectClass(c));
             list.appendChild(slot);
           });
         }
-        const addBtn = document.createElement('button');
-        addBtn.className = 'btn btn-text btn-sm';
-        addBtn.textContent = '+ Agendar aula neste dia';
-        addBtn.addEventListener('click', () => onCreateAt(day));
         section.appendChild(list);
-        section.appendChild(addBtn);
+        if (onCreateAt) {
+          const addBtn = document.createElement('button');
+          addBtn.className = 'btn btn-text btn-sm';
+          addBtn.textContent = '+ Agendar aula neste dia';
+          addBtn.addEventListener('click', () => onCreateAt(day));
+          section.appendChild(addBtn);
+        }
         body.appendChild(section);
       });
     } else if (view === 'year') {
@@ -189,11 +192,13 @@ const Calendar = {
             <span class="grow">${escapeHtml(c.student_name)} · ${escapeHtml(c.subject_name)} <span class="muted">com ${escapeHtml(c.teacher_name)}</span></span>
           </div>`).join('')}
       </div>
-      <div class="form-actions"><button class="btn btn-accent" id="dl-add">+ Agendar aula neste dia</button></div>
+      ${onCreateAt ? `<div class="form-actions"><button class="btn btn-accent" id="dl-add">+ Agendar aula neste dia</button></div>` : ''}
     `;
     const backdrop = openModal(html);
     backdrop.querySelector('#dl-close').onclick = closeModal;
-    backdrop.querySelector('#dl-add').onclick = () => { closeModal(); onCreateAt(day); };
+    if (onCreateAt) {
+      backdrop.querySelector('#dl-add').onclick = () => { closeModal(); onCreateAt(day); };
+    }
     backdrop.querySelectorAll('.slot').forEach(el => {
       el.addEventListener('click', () => {
         const cls = list.find(c => String(c.id) === el.dataset.id);

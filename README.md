@@ -166,7 +166,7 @@ considerar o plano pago caso note lentidão.
   nasce com R$ 0,00 e você define/edita o valor de cada mês diretamente em Pagamentos →
   Pagamentos especiais (clique em "Definir valor"). Na ficha do aluno: dados, calendário
   de aulas, notas e observações.
-- **Professores** — cadastro com disciplinas e PIX. Também é possível dar a cada
+- **Professores** — cadastro com disciplinas e PIX, com busca por nome na lista. Também é possível dar a cada
   professor um **login próprio** (e-mail + senha, preenchidos por você no cadastro):
   com ele, o professor entra pelo mesmo endereço do site e cai numa área só dele
   (`/professor.html`), onde vê o valor a receber na quinzena atual (que atualiza sozinho
@@ -182,12 +182,21 @@ considerar o plano pago caso note lentidão.
   quadradinhos. Isso é só uma anotação; como pedido, não bloqueia nem avisa nada no
   agendamento. Na ficha do professor (lado da secretaria): dados, alunos e feedback,
   disponibilidade, calendário de aulas e o total de horas/valor de cada quinzena.
+- **Feedbacks** — uma aba própria no menu, só para a secretaria, para consultar o
+  feedback já registrado sem precisar entrar na ficha de cada professor. Alterna entre
+  "Por aluno" (busca um aluno e vê o feedback de todos os professores dele, cada item
+  já indicando qual professor escreveu) e "Por professor" (busca um professor e vê o
+  feedback que ele deu para todos os alunos dele). Tem o mesmo botão "Ver como texto" e
+  a opção de excluir um item, se precisar.
 - **Agendamento** — ao marcar uma aula você escolhe aluno → modalidade → disciplina →
   professor (a lista de professores já vem filtrada pela disciplina escolhida) → data e
-  horário → valores → link da aula. Há também uma opção de aula recorrente semanal
-  ("acompanhamento"), que cria uma aula individual por semana no período escolhido.
-  Conflitos de horário **avisam** ("⚠️ Foram identificados conflitos.") mas nunca
-  bloqueiam o agendamento. Aulas canceladas somem de todos os cálculos e telas.
+  horário → valores → link da aula. Quando a modalidade é **presencial**, o formulário e
+  a agenda mostram o **endereço cadastrado do aluno** em vez do link — é para lá que o
+  professor precisa ir. Aulas **online** continuam mostrando só o link, sem endereço. Há
+  também uma opção de aula recorrente semanal ("acompanhamento"), que cria uma aula
+  individual por semana no período escolhido. Conflitos de horário **avisam** ("⚠️ Foram
+  identificados conflitos.") mas nunca bloqueiam o agendamento. Aulas canceladas somem
+  de todos os cálculos e telas.
 - **Pagamentos** — abas para "A receber" (aulas avulsas pendentes), "A pagar"
   (faturas quinzenais dos professores, geradas automaticamente ao fim de cada
   quinzena), "Pagamentos especiais" (mensalistas), "Despesas" (contas gerais) e

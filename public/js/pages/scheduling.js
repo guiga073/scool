@@ -53,6 +53,10 @@ async function openClassFormModal(options, onSaved) {
           <option value="online" ${existing && existing.modality === 'online' ? 'selected' : ''}>Online</option>
         </select>
       </div>
+      <div class="field hidden" id="cf-address-wrap">
+        <label>Endereço da aula</label>
+        <div class="alert alert-info" id="cf-address-display" style="margin-bottom:0;"></div>
+      </div>
       <div class="field"><label for="cf-subject">Disciplina</label>
         <select id="cf-subject" required>
           <option value="">Selecione…</option>
@@ -113,6 +117,22 @@ async function openClassFormModal(options, onSaved) {
   subjectSelect.addEventListener('change', () => {
     backdrop.querySelector('#cf-teacher').innerHTML = teacherOptions(subjectSelect.value);
   });
+
+  const studentSelect = backdrop.querySelector('#cf-student');
+  const modalitySelect = backdrop.querySelector('#cf-modality');
+  const addressWrap = backdrop.querySelector('#cf-address-wrap');
+  const addressDisplay = backdrop.querySelector('#cf-address-display');
+  function updateAddressDisplay() {
+    const isPresencial = modalitySelect.value === 'presencial';
+    addressWrap.classList.toggle('hidden', !isPresencial);
+    if (!isPresencial) return;
+    const student = students.find(s => String(s.id) === studentSelect.value);
+    if (!student) { addressDisplay.textContent = 'Selecione o aluno para ver o endereço cadastrado dele.'; return; }
+    addressDisplay.textContent = student.address ? student.address : `${student.name} não tem endereço cadastrado — adicione em Alunos para que apareça aqui.`;
+  }
+  studentSelect.addEventListener('change', updateAddressDisplay);
+  modalitySelect.addEventListener('change', updateAddressDisplay);
+  updateAddressDisplay();
 
   const recurringCheckbox = backdrop.querySelector('#cf-recurring');
   if (recurringCheckbox) {
@@ -193,7 +213,9 @@ async function openClassDetailModal(cls, onChanged) {
     </div>
     <div class="field-row">
       <div><div class="text-sm muted">Modalidade</div><p>${cls.modality === 'online' ? 'Online' : 'Presencial'}</p></div>
-      <div><div class="text-sm muted">Link</div><p>${cls.meeting_link ? `<a href="${escapeHtml(cls.meeting_link)}" target="_blank" rel="noopener">Abrir link</a>` : '—'}</p></div>
+      ${cls.modality === 'presencial'
+        ? `<div><div class="text-sm muted">Endereço</div><p>${cls.student_address ? escapeHtml(cls.student_address) : '<span class="muted">Aluno sem endereço cadastrado</span>'}</p></div>`
+        : `<div><div class="text-sm muted">Link</div><p>${cls.meeting_link ? `<a href="${escapeHtml(cls.meeting_link)}" target="_blank" rel="noopener">Abrir link</a>` : '—'}</p></div>`}
     </div>
     <div class="field-row">
       <div><div class="text-sm muted">Aluno paga</div><p class="tabular">${formatCurrency(cls.student_value)} ${cls.student_paid ? '<span class="badge badge-confirmed">Recebido</span>' : '<span class="badge badge-pending">Pendente</span>'}</p></div>

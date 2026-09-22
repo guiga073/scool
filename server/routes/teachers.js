@@ -77,7 +77,7 @@ function register(router) {
     if (!row) throw httpError(404, 'Professor não encontrado');
 
     const classes = db.prepare(`
-      SELECT classes.*, students.name AS student_name, subjects.name AS subject_name
+      SELECT classes.*, students.name AS student_name, students.address AS student_address, subjects.name AS subject_name
       FROM classes
       JOIN students ON students.id = classes.student_id
       JOIN subjects ON subjects.id = classes.subject_id
@@ -164,6 +164,20 @@ function register(router) {
     requireAuth(req);
     svc.deleteFeedback(db, req.params.teacherId, req.params.studentId, req.params.feedbackId);
     sendJson(res, 200, { ok: true });
+  });
+
+  // Todo o feedback já dado por este professor, de qualquer aluno dele (para a tela
+  // "Feedbacks" do administrador, no modo "por professor").
+  router.get('/api/teachers/:id/feedback', async (req, res) => {
+    requireAuth(req);
+    const rows = db.prepare(`
+      SELECT class_feedback.*, students.name AS student_name
+      FROM class_feedback
+      JOIN students ON students.id = class_feedback.student_id
+      WHERE class_feedback.teacher_id = ?
+      ORDER BY class_feedback.date DESC, class_feedback.id DESC
+    `).all(req.params.id);
+    sendJson(res, 200, rows);
   });
 }
 
