@@ -31,6 +31,16 @@ function studentFormModal(existing, onSaved) {
         </div>
         <div class="hint">As aulas continuam sendo registradas e aparecendo no calendário normalmente. Elas só não entram na lista de "a receber por aula" — em vez disso, este aluno aparece em "Pagamentos especiais", onde você define o valor a receber a cada mês.</div>
       </div>
+      <div class="field">
+        <label>Acesso do aluno ao sistema</label>
+        <div class="hint" style="margin-top:-2px; margin-bottom:8px;">Opcional. Se preenchido, o aluno poderá entrar com este e-mail e senha para ver as próprias aulas e o feedback dos professores.${s.has_login ? ' <strong>Este aluno já tem acesso configurado.</strong>' : ''}</div>
+        <div class="field-row">
+          <div class="field mb-0"><label for="sf-login-email">E-mail de acesso</label>
+            <input type="email" id="sf-login-email" value="${escapeHtml(s.login_email || '')}" placeholder="aluno@exemplo.com"></div>
+          <div class="field mb-0"><label for="sf-login-password">${s.has_login ? 'Nova senha (deixe em branco p/ manter)' : 'Senha de acesso'}</label>
+            <input type="password" id="sf-login-password" autocomplete="new-password"></div>
+        </div>
+      </div>
       <div id="sf-error" class="alert alert-danger hidden"></div>
       <div class="form-actions">
         <button type="button" class="btn btn-outline" id="sf-cancel">Cancelar</button>
@@ -38,7 +48,7 @@ function studentFormModal(existing, onSaved) {
       </div>
     </form>
   `;
-  const backdrop = openModal(html);
+  const backdrop = openModal(html, { wide: true });
   backdrop.querySelector('#sf-close').onclick = closeModal;
   backdrop.querySelector('#sf-cancel').onclick = closeModal;
   const monthlyCheckbox = backdrop.querySelector('#sf-monthly');
@@ -55,6 +65,8 @@ function studentFormModal(existing, onSaved) {
       guardian_name: backdrop.querySelector('#sf-guardian').value.trim(),
       guardian_phone: backdrop.querySelector('#sf-guardian-phone').value.trim(),
       monthly_payment: monthlyCheckbox.checked,
+      login_email: backdrop.querySelector('#sf-login-email').value.trim(),
+      login_password: backdrop.querySelector('#sf-login-password').value,
     };
     try {
       const saved = existing ? await api.put(`/api/students/${existing.id}`, payload) : await api.post('/api/students', payload);
@@ -102,7 +114,7 @@ Pages.studentsList = async function (root, opts) {
     }
     wrap.innerHTML = `
       <div class="table-wrap"><table>
-        <thead><tr><th>Nome</th><th>Responsável</th><th>Telefone</th><th>Pagamento</th></tr></thead>
+        <thead><tr><th>Nome</th><th>Responsável</th><th>Telefone</th><th>Pagamento</th><th>Acesso</th></tr></thead>
         <tbody>
           ${students.map(s => `
             <tr class="row-link" data-id="${s.id}">
@@ -110,6 +122,7 @@ Pages.studentsList = async function (root, opts) {
               <td>${escapeHtml(s.guardian_name || '—')}</td>
               <td>${escapeHtml(s.phone || s.guardian_phone || '—')}</td>
               <td>${s.monthly_payment ? `<span class="badge badge-pending">Mensal</span>` : `<span class="badge badge-neutral">Por aula</span>`}</td>
+              <td>${s.has_login ? '<span class="badge badge-confirmed">Tem login</span>' : '<span class="badge badge-neutral">Sem login</span>'}</td>
             </tr>
           `).join('')}
         </tbody>
@@ -183,6 +196,7 @@ Pages.studentDetail = async function (root, id) {
           <div><div class="text-sm muted">Responsável</div><p>${escapeHtml(student.guardian_name || '—')}</p></div>
           <div><div class="text-sm muted">Telefone do responsável</div><p>${escapeHtml(student.guardian_phone || '—')}</p></div>
         </div>
+        <div><div class="text-sm muted">Acesso ao sistema</div><p>${student.has_login ? `<span class="badge badge-confirmed">Login ativo</span> ${escapeHtml(student.login_email)}` : '<span class="badge badge-neutral">Sem acesso configurado</span>'}</p></div>
       </div>
     `;
     document.getElementById('edit-student-btn').addEventListener('click', () => {

@@ -30,13 +30,12 @@ function teacherToJson(row) {
   return { ...rest, active: !!row.active, has_login: !!row.login_email, availability_grid: parseGrid(availability_grid), subjects: getTeacherSubjects(row.id) };
 }
 
-// Garante que o e-mail de acesso não colida com um admin nem com outro professor.
+// Garante que o e-mail de acesso não colida com um admin, outro professor, ou um aluno.
 function assertLoginEmailAvailable(email, excludeTeacherId) {
-  if (!email) return;
-  const asAdmin = db.prepare('SELECT id FROM admins WHERE email = ?').get(email);
-  if (asAdmin) throw httpError(400, 'Este e-mail já está em uso por uma conta de administração');
-  const asTeacher = db.prepare('SELECT id FROM teachers WHERE login_email = ? AND id != ?').get(email, excludeTeacherId || 0);
-  if (asTeacher) throw httpError(400, 'Este e-mail já está em uso por outro professor');
+  const conflict = svc.findLoginEmailConflict(db, email, excludeTeacherId ? { type: 'teacher', id: excludeTeacherId } : null);
+  if (conflict === 'admin') throw httpError(400, 'Este e-mail já está em uso por uma conta de administração');
+  if (conflict === 'teacher') throw httpError(400, 'Este e-mail já está em uso por outro professor');
+  if (conflict === 'student') throw httpError(400, 'Este e-mail já está em uso por um aluno');
 }
 
 function register(router) {

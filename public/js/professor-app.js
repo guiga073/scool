@@ -13,6 +13,7 @@ async function initProfessorApp() {
     const meResp = await api.get('/api/auth/me');
     if (!meResp.user) { window.location.href = '/login.html'; return; }
     if (meResp.user.type === 'admin') { window.location.href = '/'; return; }
+    if (meResp.user.type === 'student') { window.location.href = '/aluno.html'; return; }
     me = meResp.user;
   } catch (e) {
     window.location.href = '/login.html';

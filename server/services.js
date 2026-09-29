@@ -216,6 +216,24 @@ function deleteFeedback(db, teacherId, studentId, feedbackId) {
   ).run(feedbackId, teacherId, studentId);
 }
 
+// ---------- Contas de acesso (e-mail de login) ----------
+
+// Verifica se um e-mail de login já está em uso em QUALQUER tipo de conta
+// (admin, professor ou aluno), para que o login por e-mail nunca fique ambíguo.
+// exclude: { type: 'teacher'|'student', id } — ignora a própria conta ao editar.
+function findLoginEmailConflict(db, email, exclude) {
+  if (!email) return null;
+  const asAdmin = db.prepare('SELECT id FROM admins WHERE email = ?').get(email);
+  if (asAdmin) return 'admin';
+  const teacherExcludeId = (exclude && exclude.type === 'teacher') ? exclude.id : 0;
+  const asTeacher = db.prepare('SELECT id FROM teachers WHERE login_email = ? AND id != ?').get(email, teacherExcludeId);
+  if (asTeacher) return 'teacher';
+  const studentExcludeId = (exclude && exclude.type === 'student') ? exclude.id : 0;
+  const asStudent = db.prepare('SELECT id FROM students WHERE login_email = ? AND id != ?').get(email, studentExcludeId);
+  if (asStudent) return 'student';
+  return null;
+}
+
 module.exports = {
   getQuinzenaPeriods,
   quinzenaForDate,
@@ -231,4 +249,5 @@ module.exports = {
   listFeedback,
   addFeedback,
   deleteFeedback,
+  findLoginEmailConflict,
 };

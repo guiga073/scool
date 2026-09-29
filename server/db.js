@@ -32,6 +32,8 @@ CREATE TABLE IF NOT EXISTS students (
   guardian_phone TEXT,
   phone TEXT,
   email TEXT,
+  login_email TEXT,
+  password_hash TEXT,
   monthly_payment INTEGER NOT NULL DEFAULT 0,
   monthly_value REAL,
   active INTEGER NOT NULL DEFAULT 1,
@@ -162,6 +164,8 @@ function ensureColumn(table, column, definition) {
 ensureColumn('teachers', 'availability_grid', 'TEXT');
 ensureColumn('teachers', 'login_email', 'TEXT');
 ensureColumn('teachers', 'password_hash', 'TEXT');
+ensureColumn('students', 'login_email', 'TEXT');
+ensureColumn('students', 'password_hash', 'TEXT');
 
 // A tabela de sessões mudou de "sempre admin" (admin_id) para "admin ou professor"
 // (user_type + user_id). Sessões são só tokens de login temporários — se o formato

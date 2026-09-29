@@ -16,7 +16,7 @@
           <path fill="#ffc000" d="M 1125.984375 647.519531 L 1111.730469 639.5 L 1103.710938 637.71875 L 948.675781 637.71875 L 947.785156 638.609375 L 935.3125 638.609375 L 934.421875 639.5 L 919.273438 641.28125 L 889.871094 650.191406 L 864.03125 661.773438 L 832.847656 682.269531 L 805.226562 709.890625 L 789.1875 731.273438 L 767.804688 774.933594 L 759.785156 799.878906 L 758.894531 807.007812 L 756.222656 813.246094 L 751.765625 836.410156 L 750.875 849.777344 L 749.09375 856.902344 L 749.09375 867.597656 L 748.203125 868.488281 L 748.203125 1061.835938 L 749.09375 1062.726562 L 749.09375 1071.636719 L 749.984375 1074.308594 L 753.546875 1077.871094 L 756.222656 1078.761719 L 1026.195312 1078.761719 L 1027.085938 1077.871094 L 1052.925781 1078.761719 L 1053.816406 1077.871094 L 1079.652344 1077.871094 L 1086.78125 1076.089844 L 1097.472656 1069.851562 L 1108.167969 1060.941406 L 1131.332031 1036.886719 L 1136.679688 1029.757812 L 1142.914062 1018.175781 L 1145.589844 1006.59375 L 1145.589844 676.03125 L 1140.242188 662.667969 Z M 1125.984375 647.519531 "/>
         </svg>
         <h1>Olimais</h1>
-        <p>Entre com sua conta de administração ou de professor</p>
+        <p>Entre com sua conta de administração, professor ou aluno</p>
       </div>
       <form id="login-form">
         <div class="field">
@@ -47,7 +47,7 @@
           email: document.getElementById('email').value,
           password: document.getElementById('password').value,
         });
-        window.location.href = result.type === 'teacher' ? '/professor.html' : '/';
+        window.location.href = result.type === 'teacher' ? '/professor.html' : result.type === 'student' ? '/aluno.html' : '/';
       } catch (err) {
         errEl.textContent = err.message || 'Não foi possível entrar.';
         errEl.classList.remove('hidden');
@@ -58,7 +58,7 @@
 
     // Se já estiver logado, pula direto pro app certo
     api.get('/api/auth/me').then(r => {
-      if (r.user) window.location.href = r.user.type === 'teacher' ? '/professor.html' : '/';
+      if (r.user) window.location.href = r.user.type === 'teacher' ? '/professor.html' : r.user.type === 'student' ? '/aluno.html' : '/';
     });
   </script>
 </body>

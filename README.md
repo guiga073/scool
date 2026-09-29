@@ -164,8 +164,13 @@ considerar o plano pago caso note lentidão.
   vez de na lista de cobrança por aula — as aulas dele continuam no calendário
   normalmente. O valor da mensalidade **não** é definido no cadastro: toda mensalidade
   nasce com R$ 0,00 e você define/edita o valor de cada mês diretamente em Pagamentos →
-  Pagamentos especiais (clique em "Definir valor"). Na ficha do aluno: dados, calendário
-  de aulas, notas e observações.
+  Pagamentos especiais (clique em "Definir valor"). Assim como o professor, cada aluno
+  também pode ter um **login próprio** (e-mail + senha, preenchidos por você no
+  cadastro): com ele, o aluno entra pelo mesmo endereço do site e cai numa área só dele
+  (`/aluno.html`), com duas abas — "Minhas aulas" (a própria agenda: dia, horário,
+  disciplina, professor, e o link quando a aula é online) e "Feedbacks" (tudo que os
+  professores já escreveram sobre ele, de forma só de leitura — quem escreve é sempre
+  o professor). Na ficha do aluno: dados, calendário de aulas, notas e observações.
 - **Professores** — cadastro com disciplinas e PIX, com busca por nome na lista. Também é possível dar a cada
   professor um **login próprio** (e-mail + senha, preenchidos por você no cadastro):
   com ele, o professor entra pelo mesmo endereço do site e cai numa área só dele

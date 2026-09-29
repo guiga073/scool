@@ -2,10 +2,20 @@
 const { db } = require('../db');
 const { sendJson, httpError } = require('../router');
 const { requireAuth } = require('./auth');
+const { hashPassword } = require('../auth');
 const svc = require('../services');
 
 function studentToJson(row) {
-  return { ...row, monthly_payment: !!row.monthly_payment, active: !!row.active };
+  const { password_hash, ...rest } = row;
+  return { ...rest, monthly_payment: !!row.monthly_payment, active: !!row.active, has_login: !!row.login_email };
+}
+
+// Garante que o e-mail de acesso não colida com um admin, um professor, ou outro aluno.
+function assertLoginEmailAvailable(email, excludeStudentId) {
+  const conflict = svc.findLoginEmailConflict(db, email, excludeStudentId ? { type: 'student', id: excludeStudentId } : null);
+  if (conflict === 'admin') throw httpError(400, 'Este e-mail já está em uso por uma conta de administração');
+  if (conflict === 'teacher') throw httpError(400, 'Este e-mail já está em uso por um professor');
+  if (conflict === 'student') throw httpError(400, 'Este e-mail já está em uso por outro aluno');
 }
 
 function register(router) {
@@ -25,12 +35,17 @@ function register(router) {
     requireAuth(req);
     const b = req.body;
     if (!b.name || !b.name.trim()) throw httpError(400, 'Nome do aluno é obrigatório');
+    const loginEmail = b.login_email ? String(b.login_email).trim().toLowerCase() : null;
+    assertLoginEmailAvailable(loginEmail, null);
+    if (loginEmail && !b.login_password) throw httpError(400, 'Defina uma senha de acesso para o aluno');
+
     const info = db.prepare(`
-      INSERT INTO students (name, address, guardian_name, guardian_phone, phone, email, monthly_payment)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO students (name, address, guardian_name, guardian_phone, phone, email, monthly_payment, login_email, password_hash)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       b.name.trim(), b.address || null, b.guardian_name || null, b.guardian_phone || null,
-      b.phone || null, b.email || null, b.monthly_payment ? 1 : 0
+      b.phone || null, b.email || null, b.monthly_payment ? 1 : 0,
+      loginEmail, b.login_password ? hashPassword(b.login_password) : null
     );
     const row = db.prepare('SELECT * FROM students WHERE id = ?').get(info.lastInsertRowid);
     sendJson(res, 201, studentToJson(row));
@@ -62,12 +77,26 @@ function register(router) {
     const existing = db.prepare('SELECT * FROM students WHERE id = ?').get(req.params.id);
     if (!existing) throw httpError(404, 'Aluno não encontrado');
     if (!b.name || !b.name.trim()) throw httpError(400, 'Nome do aluno é obrigatório');
+
+    const loginEmail = b.login_email ? String(b.login_email).trim().toLowerCase() : null;
+    assertLoginEmailAvailable(loginEmail, existing.id);
+    let passwordHash = existing.password_hash;
+    if (b.login_password) {
+      passwordHash = hashPassword(b.login_password);
+    } else if (loginEmail && loginEmail !== existing.login_email) {
+      throw httpError(400, 'Defina uma senha de acesso para o aluno');
+    } else if (!loginEmail) {
+      passwordHash = null;
+    }
+
     db.prepare(`
-      UPDATE students SET name=?, address=?, guardian_name=?, guardian_phone=?, phone=?, email=?, monthly_payment=?
+      UPDATE students SET name=?, address=?, guardian_name=?, guardian_phone=?, phone=?, email=?, monthly_payment=?,
+        login_email=?, password_hash=?
       WHERE id=?
     `).run(
       b.name.trim(), b.address || null, b.guardian_name || null, b.guardian_phone || null,
       b.phone || null, b.email || null, b.monthly_payment ? 1 : 0,
+      loginEmail, passwordHash,
       req.params.id
     );
     const row = db.prepare('SELECT * FROM students WHERE id = ?').get(req.params.id);

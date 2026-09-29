@@ -48,6 +48,11 @@ function getSessionUser(db, token) {
     if (!row) return null;
     return { type: 'teacher', id: row.id, email: row.email, name: row.name };
   }
+  if (session.user_type === 'student') {
+    const row = db.prepare('SELECT id, login_email AS email, name FROM students WHERE id = ? AND active = 1').get(session.user_id);
+    if (!row) return null;
+    return { type: 'student', id: row.id, email: row.email, name: row.name };
+  }
   return null;
 }
 

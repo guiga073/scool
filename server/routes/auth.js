@@ -20,6 +20,13 @@ function requireTeacherAuth(req) {
   return user;
 }
 
+function requireStudentAuth(req) {
+  const cookies = parseCookies(req);
+  const user = getSessionUser(db, cookies.session);
+  if (!user || user.type !== 'student') throw httpError(401, 'Não autenticado');
+  return user;
+}
+
 function register(router) {
   router.post('/api/auth/login', async (req, res) => {
     const { email, password } = req.body || {};
@@ -39,6 +46,14 @@ function register(router) {
       const { token } = createSession(db, 'teacher', teacher.id);
       setSessionCookie(res, token);
       sendJson(res, 200, { type: 'teacher', id: teacher.id, email: teacher.login_email, name: teacher.name });
+      return;
+    }
+
+    const student = db.prepare('SELECT * FROM students WHERE login_email = ? AND active = 1').get(normalizedEmail);
+    if (student && student.password_hash && verifyPassword(password, student.password_hash)) {
+      const { token } = createSession(db, 'student', student.id);
+      setSessionCookie(res, token);
+      sendJson(res, 200, { type: 'student', id: student.id, email: student.login_email, name: student.name });
       return;
     }
 
@@ -69,4 +84,4 @@ function register(router) {
   });
 }
 
-module.exports = { register, requireAuth, requireTeacherAuth };
+module.exports = { register, requireAuth, requireTeacherAuth, requireStudentAuth };
