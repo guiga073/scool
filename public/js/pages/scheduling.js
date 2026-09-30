@@ -12,6 +12,26 @@ function conflictWarningHtml(conflicts) {
   </div>`;
 }
 
+// Duração em horas a partir de dois horários 'HH:MM'. null se algo estiver incompleto/inválido.
+function calcDurationHours(startTimeStr, endTimeStr) {
+  if (!startTimeStr || !endTimeStr) return null;
+  const [sh, sm] = startTimeStr.split(':').map(Number);
+  const [eh, em] = endTimeStr.split(':').map(Number);
+  if ([sh, sm, eh, em].some(n => Number.isNaN(n))) return null;
+  const diffMinutes = (eh * 60 + em) - (sh * 60 + sm);
+  if (diffMinutes <= 0) return null;
+  return diffMinutes / 60;
+}
+
+// Valor sugerido = valor/hora do professor (conforme a modalidade) × duração da aula.
+// null quando faltar professor, modalidade, duração, ou o professor não tiver valor/hora definido.
+function calcAutoTeacherValue(teacher, modality, durationHours) {
+  if (!teacher || !durationHours) return null;
+  const rate = modality === 'online' ? teacher.hourly_rate_online : teacher.hourly_rate_presencial;
+  if (rate === null || rate === undefined) return null;
+  return Math.round(rate * durationHours * 100) / 100;
+}
+
 async function openClassFormModal(options, onSaved) {
   options = options || {};
   const existing = options.existing || null;
@@ -65,6 +85,7 @@ async function openClassFormModal(options, onSaved) {
       </div>
       <div class="field"><label for="cf-teacher">Professor</label>
         <select id="cf-teacher" required>${teacherOptions(existing ? existing.subject_id : '')}</select>
+        <div class="hint hidden" id="cf-rate-display"></div>
       </div>
 
       ${!existing ? `
@@ -95,7 +116,8 @@ async function openClassFormModal(options, onSaved) {
 
       <div class="field-row">
         <div class="field"><label for="cf-student-value">Valor que o aluno paga (R$)</label><input type="number" step="0.01" min="0" id="cf-student-value" value="${existing ? existing.student_value : ''}" required></div>
-        <div class="field"><label for="cf-teacher-value">Valor pago ao professor (R$)</label><input type="number" step="0.01" min="0" id="cf-teacher-value" value="${existing ? existing.teacher_value : ''}" required></div>
+        <div class="field"><label for="cf-teacher-value">Valor pago ao professor (R$)</label><input type="number" step="0.01" min="0" id="cf-teacher-value" value="${existing ? existing.teacher_value : ''}" required>
+          <div class="hint">Preenchido automaticamente a partir do valor/hora cadastrado do professor — pode editar livremente.</div></div>
       </div>
       <div class="field"><label for="cf-link">Link da aula (Google Meet ou outra plataforma)</label>
         <input type="text" id="cf-link" placeholder="https://meet.google.com/…" value="${escapeHtml(existing && existing.meeting_link || '')}"></div>
@@ -114,8 +136,11 @@ async function openClassFormModal(options, onSaved) {
   backdrop.querySelector('#cf-cancel').onclick = closeModal;
 
   const subjectSelect = backdrop.querySelector('#cf-subject');
+  const teacherSelect = backdrop.querySelector('#cf-teacher');
   subjectSelect.addEventListener('change', () => {
-    backdrop.querySelector('#cf-teacher').innerHTML = teacherOptions(subjectSelect.value);
+    teacherSelect.innerHTML = teacherOptions(subjectSelect.value);
+    updateRateDisplay();
+    autoFillTeacherValue();
   });
 
   const studentSelect = backdrop.querySelector('#cf-student');
@@ -131,14 +156,47 @@ async function openClassFormModal(options, onSaved) {
     addressDisplay.textContent = student.address ? student.address : `${student.name} não tem endereço cadastrado — adicione em Alunos para que apareça aqui.`;
   }
   studentSelect.addEventListener('change', updateAddressDisplay);
-  modalitySelect.addEventListener('change', updateAddressDisplay);
+  modalitySelect.addEventListener('change', () => { updateAddressDisplay(); autoFillTeacherValue(); });
   updateAddressDisplay();
+
+  // Mostra o valor/hora cadastrado do professor selecionado (só informativo) e usa esse
+  // valor, junto com a modalidade e a duração, para sugerir o valor pago na aula — sem
+  // nunca travar o campo, que continua livre para o admin editar a qualquer momento.
+  const rateDisplay = backdrop.querySelector('#cf-rate-display');
+  function updateRateDisplay() {
+    const teacher = teachers.find(t => String(t.id) === teacherSelect.value);
+    if (!teacher) { rateDisplay.classList.add('hidden'); return; }
+    const pres = teacher.hourly_rate_presencial != null ? `${formatCurrency(teacher.hourly_rate_presencial)}/h presencial` : 'presencial não definido';
+    const onl = teacher.hourly_rate_online != null ? `${formatCurrency(teacher.hourly_rate_online)}/h online` : 'online não definido';
+    rateDisplay.textContent = `Valor/hora deste professor: ${pres} · ${onl}`;
+    rateDisplay.classList.remove('hidden');
+  }
+
+  function currentDurationHours() {
+    const isRecurring = recurringCheckbox && recurringCheckbox.checked;
+    const startId = isRecurring ? '#cf-start-r' : '#cf-start';
+    const endId = isRecurring ? '#cf-end-r' : '#cf-end';
+    return calcDurationHours(backdrop.querySelector(startId).value, backdrop.querySelector(endId).value);
+  }
+
+  function autoFillTeacherValue() {
+    const teacher = teachers.find(t => String(t.id) === teacherSelect.value);
+    const value = calcAutoTeacherValue(teacher, modalitySelect.value, currentDurationHours());
+    if (value !== null) backdrop.querySelector('#cf-teacher-value').value = value;
+  }
+
+  teacherSelect.addEventListener('change', () => { updateRateDisplay(); autoFillTeacherValue(); });
+  ['#cf-start', '#cf-end', '#cf-start-r', '#cf-end-r'].forEach(sel => {
+    backdrop.querySelector(sel).addEventListener('input', autoFillTeacherValue);
+  });
+  updateRateDisplay();
 
   const recurringCheckbox = backdrop.querySelector('#cf-recurring');
   if (recurringCheckbox) {
     recurringCheckbox.addEventListener('change', () => {
       backdrop.querySelector('#cf-single-date').classList.toggle('hidden', recurringCheckbox.checked);
       backdrop.querySelector('#cf-recurring-date').classList.toggle('hidden', !recurringCheckbox.checked);
+      autoFillTeacherValue();
     });
   }
 

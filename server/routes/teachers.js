@@ -38,6 +38,14 @@ function assertLoginEmailAvailable(email, excludeTeacherId) {
   if (conflict === 'student') throw httpError(400, 'Este e-mail já está em uso por um aluno');
 }
 
+// Valor por hora é opcional; se vier preenchido, precisa ser um número válido e não-negativo.
+function parseRate(value) {
+  if (value === undefined || value === null || value === '') return null;
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 0) throw httpError(400, 'Valor por hora inválido');
+  return n;
+}
+
 function register(router) {
   router.get('/api/teachers', async (req, res) => {
     requireAuth(req);
@@ -58,12 +66,13 @@ function register(router) {
     if (loginEmail && !b.login_password) throw httpError(400, 'Defina uma senha de acesso para o professor');
 
     const info = db.prepare(`
-      INSERT INTO teachers (name, address, phone, pix, availability, availability_grid, login_email, password_hash)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO teachers (name, address, phone, pix, availability, availability_grid, login_email, password_hash, hourly_rate_presencial, hourly_rate_online)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       b.name.trim(), b.address || null, b.phone || null, b.pix || null, b.availability || null,
       b.availability_grid ? JSON.stringify(b.availability_grid) : null,
-      loginEmail, b.login_password ? hashPassword(b.login_password) : null
+      loginEmail, b.login_password ? hashPassword(b.login_password) : null,
+      parseRate(b.hourly_rate_presencial), parseRate(b.hourly_rate_online)
     );
     setTeacherSubjects(info.lastInsertRowid, b.subject_ids);
     const row = db.prepare('SELECT * FROM teachers WHERE id = ?').get(info.lastInsertRowid);
@@ -125,12 +134,13 @@ function register(router) {
 
     db.prepare(`
       UPDATE teachers SET name=?, address=?, phone=?, pix=?, availability=?, availability_grid=?,
-        login_email=?, password_hash=?
+        login_email=?, password_hash=?, hourly_rate_presencial=?, hourly_rate_online=?
       WHERE id=?
     `).run(
       b.name.trim(), b.address || null, b.phone || null, b.pix || null, b.availability || null,
       b.availability_grid ? JSON.stringify(b.availability_grid) : existing.availability_grid,
-      loginEmail, passwordHash, req.params.id
+      loginEmail, passwordHash, parseRate(b.hourly_rate_presencial), parseRate(b.hourly_rate_online),
+      req.params.id
     );
     setTeacherSubjects(req.params.id, b.subject_ids);
     const row = db.prepare('SELECT * FROM teachers WHERE id = ?').get(req.params.id);

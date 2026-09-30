@@ -67,6 +67,8 @@ CREATE TABLE IF NOT EXISTS teachers (
   availability_grid TEXT,
   login_email TEXT,
   password_hash TEXT,
+  hourly_rate_presencial REAL,
+  hourly_rate_online REAL,
   active INTEGER NOT NULL DEFAULT 1,
   created_at TEXT DEFAULT (datetime('now'))
 );
@@ -166,6 +168,8 @@ ensureColumn('teachers', 'login_email', 'TEXT');
 ensureColumn('teachers', 'password_hash', 'TEXT');
 ensureColumn('students', 'login_email', 'TEXT');
 ensureColumn('students', 'password_hash', 'TEXT');
+ensureColumn('teachers', 'hourly_rate_presencial', 'REAL');
+ensureColumn('teachers', 'hourly_rate_online', 'REAL');
 
 // A tabela de sessões mudou de "sempre admin" (admin_id) para "admin ou professor"
 // (user_type + user_id). Sessões são só tokens de login temporários — se o formato

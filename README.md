@@ -171,7 +171,14 @@ considerar o plano pago caso note lentidão.
   disciplina, professor, e o link quando a aula é online) e "Feedbacks" (tudo que os
   professores já escreveram sobre ele, de forma só de leitura — quem escreve é sempre
   o professor). Na ficha do aluno: dados, calendário de aulas, notas e observações.
-- **Professores** — cadastro com disciplinas e PIX, com busca por nome na lista. Também é possível dar a cada
+- **Professores** — cadastro com disciplinas e PIX, com busca por nome na lista. Tem
+  também dois campos de **valor por hora** (presencial e online) visíveis **só para
+  você** — o professor não vê esses valores, nem pela própria área dele. Eles servem
+  para preencher sozinho o campo "valor pago ao professor" ao agendar uma aula: assim
+  que você escolhe o professor, a modalidade e o horário, o sistema calcula
+  valor/hora × duração e já sugere o valor — sempre editável depois, caso você queira
+  cobrar diferente numa aula específica. Ao lado do campo de professor, no agendamento,
+  aparece o valor/hora cadastrado dele, para consulta rápida. Também é possível dar a cada
   professor um **login próprio** (e-mail + senha, preenchidos por você no cadastro):
   com ele, o professor entra pelo mesmo endereço do site e cai numa área só dele
   (`/professor.html`), onde vê o valor a receber na quinzena atual (que atualiza sozinho

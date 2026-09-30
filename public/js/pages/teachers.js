@@ -43,6 +43,17 @@ async function teacherFormModal(existing, onSaved) {
         </div>
       </div>
 
+      <div class="field">
+        <label>Valor por hora (uso interno)</label>
+        <div class="hint" style="margin-top:-2px; margin-bottom:8px;">Só aparece para você — o professor não vê esses valores. Usado para preencher sozinho o valor da aula ao agendar; você ainda pode alterar o valor em cada aula individualmente.</div>
+        <div class="field-row">
+          <div class="field mb-0"><label for="tf-rate-presencial">R$/hora — Presencial</label>
+            <input type="number" step="0.01" min="0" id="tf-rate-presencial" value="${t.hourly_rate_presencial != null ? t.hourly_rate_presencial : ''}" placeholder="Ex.: 50"></div>
+          <div class="field mb-0"><label for="tf-rate-online">R$/hora — Online</label>
+            <input type="number" step="0.01" min="0" id="tf-rate-online" value="${t.hourly_rate_online != null ? t.hourly_rate_online : ''}" placeholder="Ex.: 40"></div>
+        </div>
+      </div>
+
       <div class="field"><label>Disponibilidade</label>
         <div class="hint" style="margin-top:-2px;">Isso é só uma anotação — não bloqueia nem avisa sobre conflitos no agendamento. O próprio professor também pode preencher isso, pelo acesso dele.</div>
         <div id="tf-availability-grid" style="margin-top:8px;"></div>
@@ -96,6 +107,8 @@ async function teacherFormModal(existing, onSaved) {
       login_email: backdrop.querySelector('#tf-login-email').value.trim(),
       login_password: backdrop.querySelector('#tf-login-password').value,
       availability_grid: gridApi.getValue(),
+      hourly_rate_presencial: backdrop.querySelector('#tf-rate-presencial').value,
+      hourly_rate_online: backdrop.querySelector('#tf-rate-online').value,
     };
     try {
       const saved = existing ? await api.put(`/api/teachers/${existing.id}`, payload) : await api.post('/api/teachers', payload);
@@ -223,6 +236,10 @@ Pages.teacherDetail = async function (root, id) {
         </div>
         <div><div class="text-sm muted">Endereço</div><p>${escapeHtml(teacher.address || '—')}</p></div>
         <div><div class="text-sm muted">Disciplinas</div><p>${teacher.subjects.map(s => escapeHtml(s.name)).join(', ') || '—'}</p></div>
+        <div class="field-row">
+          <div><div class="text-sm muted">Valor/hora — Presencial (uso interno)</div><p class="tabular">${teacher.hourly_rate_presencial != null ? formatCurrency(teacher.hourly_rate_presencial) : '—'}</p></div>
+          <div><div class="text-sm muted">Valor/hora — Online (uso interno)</div><p class="tabular">${teacher.hourly_rate_online != null ? formatCurrency(teacher.hourly_rate_online) : '—'}</p></div>
+        </div>
         <div><div class="text-sm muted">Acesso ao sistema</div><p>${teacher.has_login ? `<span class="badge badge-confirmed">Login ativo</span> ${escapeHtml(teacher.login_email)}` : '<span class="badge badge-neutral">Sem acesso configurado</span>'}</p></div>
       </div>
     `;
