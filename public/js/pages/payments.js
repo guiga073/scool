@@ -168,7 +168,7 @@ Pages.payments = async function (root) {
   }
 
   async function renderDespesas(body) {
-    const rows = await api.get('/api/expenses');
+    const [rows, recurring] = await Promise.all([api.get('/api/expenses'), api.get('/api/expenses/recurring')]);
     const total = rows.reduce((s, r) => s + Number(r.value), 0);
     body.innerHTML = `
       <div class="card">
@@ -180,12 +180,18 @@ Pages.payments = async function (root) {
           <thead><tr><th>Descrição</th><th>Vencimento</th><th class="num">Valor</th><th></th></tr></thead>
           <tbody>${rows.map(r => `
             <tr>
-              <td>${escapeHtml(r.description)}</td>
+              <td>${escapeHtml(r.description)} ${r.recurring_expense_id ? '<span class="badge badge-neutral">Recorrente</span>' : ''}</td>
               <td>${r.due_date ? formatDate(r.due_date + ' 00:00:00') : '—'}</td>
               <td class="num tabular">${formatCurrency(r.value)}</td>
               <td><button class="btn btn-outline btn-sm" data-mark="${r.id}">Marcar paga</button></td>
             </tr>`).join('')}</tbody>
         </table></div>`}
+      </div>
+      <div class="card">
+        <div class="card-header"><h2>Despesas recorrentes</h2>
+          <button class="btn btn-outline btn-sm" id="add-recurring-btn">+ Nova despesa recorrente</button></div>
+        <p class="text-sm muted mt-0">Assinaturas e outras contas fixas do negócio. Geram sozinhas uma despesa todo mês, no dia escolhido — você só marca como paga quando quitar.</p>
+        <div id="recurring-list"></div>
       </div>
     `;
     body.querySelectorAll('[data-mark]').forEach(btn => {
@@ -221,27 +227,208 @@ Pages.payments = async function (root) {
         renderDespesas(body);
       });
     });
+
+    const recListEl = document.getElementById('recurring-list');
+    if (recurring.length === 0) {
+      recListEl.innerHTML = `<div class="empty-state text-sm" style="padding:16px;">Nenhuma despesa recorrente cadastrada.</div>`;
+    } else {
+      recListEl.innerHTML = `<div class="table-wrap"><table>
+        <thead><tr><th>Descrição</th><th>Dia do mês</th><th class="num">Valor</th><th></th></tr></thead>
+        <tbody>${recurring.map(r => `
+          <tr>
+            <td>${escapeHtml(r.description)}</td>
+            <td>Todo dia ${r.day_of_month}</td>
+            <td class="num tabular">${formatCurrency(r.value)}</td>
+            <td class="flex gap-8">
+              <button class="btn btn-outline btn-sm" data-edit-rec="${r.id}">Editar</button>
+              <button class="btn-text text-sm" data-del-rec="${r.id}">Desativar</button>
+            </td>
+          </tr>`).join('')}</tbody>
+      </table></div>`;
+      recListEl.querySelectorAll('[data-del-rec]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const ok = await confirmModal('Desativar esta despesa recorrente? Ela para de gerar cobranças novas a partir do próximo mês. A despesa deste mês, se já tiver sido gerada, continua normalmente até você marcar como paga.', 'Desativar');
+          if (!ok) return;
+          await api.delete(`/api/expenses/recurring/${btn.dataset.delRec}`);
+          showToast('Despesa recorrente desativada.');
+          renderDespesas(body);
+        });
+      });
+      recListEl.querySelectorAll('[data-edit-rec]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const r = recurring.find(x => String(x.id) === btn.dataset.editRec);
+          openRecurringExpenseModal(r, body);
+        });
+      });
+    }
+
+    document.getElementById('add-recurring-btn').addEventListener('click', () => openRecurringExpenseModal(null, body));
+  }
+
+  function openRecurringExpenseModal(existing, body) {
+    const r = existing || {};
+    const backdrop = openModal(`
+      <div class="modal-header"><h3>${existing ? 'Editar despesa recorrente' : 'Nova despesa recorrente'}</h3><button class="modal-close" id="rf-close">&times;</button></div>
+      <form id="recurring-form">
+        <div class="field"><label for="rf-desc">Descrição</label>
+          <input type="text" id="rf-desc" required placeholder="Ex.: Assinatura do Zoom" value="${escapeHtml(r.description || '')}"></div>
+        <div class="field-row">
+          <div class="field"><label for="rf-value">Valor mensal (R$)</label><input type="number" step="0.01" min="0" id="rf-value" required value="${r.value != null ? r.value : ''}"></div>
+          <div class="field"><label for="rf-day">Dia do mês</label><input type="number" min="1" max="31" id="rf-day" required value="${r.day_of_month || 1}"></div>
+        </div>
+        <div class="hint">Em meses mais curtos que o dia escolhido (ex.: dia 31 em fevereiro), a despesa é gerada no último dia do mês.</div>
+        <div class="form-actions"><button type="button" class="btn btn-outline" id="rf-cancel">Cancelar</button><button type="submit" class="btn btn-primary">Salvar</button></div>
+      </form>
+    `);
+    backdrop.querySelector('#rf-close').onclick = closeModal;
+    backdrop.querySelector('#rf-cancel').onclick = closeModal;
+    backdrop.querySelector('#recurring-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const payload = {
+        description: backdrop.querySelector('#rf-desc').value.trim(),
+        value: Number(backdrop.querySelector('#rf-value').value),
+        day_of_month: Number(backdrop.querySelector('#rf-day').value),
+      };
+      if (existing) await api.put(`/api/expenses/recurring/${existing.id}`, payload);
+      else await api.post('/api/expenses/recurring', payload);
+      closeModal();
+      showToast(existing ? 'Despesa recorrente atualizada.' : 'Despesa recorrente criada.');
+      renderDespesas(body);
+    });
   }
 
   async function renderHistorico(body) {
-    const rows = await api.get('/api/payments/history');
+    let selectedStudent = null;
+    let viewYear = new Date().getFullYear();
+    let viewMonth = new Date().getMonth() + 1;
+
     body.innerHTML = `
       <div class="card">
-        <div class="card-header"><h2>Histórico de pagamentos e recebimentos</h2></div>
-        ${rows.length === 0 ? `<div class="empty-state">Nada no histórico ainda.</div>` : `
-        <div class="table-wrap"><table>
-          <thead><tr><th>Tipo</th><th>Nome</th><th>Referência</th><th class="num">Valor</th><th>Data</th></tr></thead>
-          <tbody>${rows.map(r => `
-            <tr>
-              <td><span class="badge badge-neutral">${typeLabel(r.type)}</span></td>
-              <td>${escapeHtml(r.name)}</td>
-              <td>${escapeHtml(String(r.reference_date || '').slice(0, 10))}</td>
-              <td class="num tabular">${formatCurrency(r.value)}</td>
-              <td>${r.paid_at ? formatDateTime(r.paid_at) : '—'}</td>
-            </tr>`).join('')}</tbody>
-        </table></div>`}
+        <div class="card-header"><h2>Buscar por aluno</h2></div>
+        <p class="text-sm muted mt-0">Busque pelo nome do aluno ou do responsável para ver quais aulas do mês já foram pagas.</p>
+        <input type="text" class="search-input" id="hist-search" placeholder="Nome do aluno ou do responsável…">
+        <div id="hist-search-results" style="margin-top:10px;"></div>
       </div>
+      <div id="hist-student-detail"></div>
+      <div id="hist-general"></div>
     `;
+
+    const searchInput = document.getElementById('hist-search');
+    const resultsEl = document.getElementById('hist-search-results');
+    const detailEl = document.getElementById('hist-student-detail');
+    const generalEl = document.getElementById('hist-general');
+
+    let debounce;
+    searchInput.addEventListener('input', () => {
+      clearTimeout(debounce);
+      debounce = setTimeout(runSearch, 250);
+    });
+
+    async function runSearch() {
+      const q = searchInput.value.trim();
+      if (!q) {
+        resultsEl.innerHTML = '';
+        detailEl.innerHTML = '';
+        selectedStudent = null;
+        renderGeneral();
+        return;
+      }
+      const students = await api.get(`/api/payments/student-search?q=${encodeURIComponent(q)}`);
+      if (students.length === 0) {
+        resultsEl.innerHTML = `<div class="empty-state text-sm" style="padding:12px;">Nenhum aluno encontrado.</div>`;
+        detailEl.innerHTML = '';
+        generalEl.innerHTML = '';
+        return;
+      }
+      resultsEl.innerHTML = `<div class="pill-toggle">${students.map(s => `
+        <button type="button" data-id="${s.id}" class="${selectedStudent && selectedStudent.id === s.id ? 'active' : ''}">
+          ${escapeHtml(s.name)}${s.guardian_name ? ` <span class="muted">(resp.: ${escapeHtml(s.guardian_name)})</span>` : ''}
+        </button>`).join('')}</div>`;
+      resultsEl.querySelectorAll('button[data-id]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          resultsEl.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          selectedStudent = students.find(s => String(s.id) === btn.dataset.id);
+          const now = new Date();
+          viewYear = now.getFullYear(); viewMonth = now.getMonth() + 1;
+          generalEl.innerHTML = '';
+          renderStudentMonth();
+        });
+      });
+    }
+
+    async function renderStudentMonth() {
+      detailEl.innerHTML = `<div class="card"><div class="loading-dots">Carregando…</div></div>`;
+      const data = await api.get(`/api/payments/student/${selectedStudent.id}/month?year=${viewYear}&month=${viewMonth}`);
+      const totalPending = data.classes.filter(c => !c.student_paid).reduce((s, c) => s + Number(c.student_value), 0)
+        + (data.monthlyCharge && data.monthlyCharge.status === 'pending' ? Number(data.monthlyCharge.value) : 0);
+
+      detailEl.innerHTML = `
+        <div class="card card-ruled">
+          <div class="card-header">
+            <h2>${escapeHtml(selectedStudent.name)}</h2>
+            <div class="calendar-nav">
+              <button class="btn btn-outline btn-sm" id="hist-prev-month">&larr;</button>
+              <span class="label" style="font-size:15px; min-width:140px;">${MONTH_NAMES[viewMonth - 1]} de ${viewYear}</span>
+              <button class="btn btn-outline btn-sm" id="hist-next-month">&rarr;</button>
+            </div>
+          </div>
+          ${totalPending > 0 ? `<div class="alert alert-info">${formatCurrency(totalPending)} pendente neste mês.</div>` : `<div class="alert alert-info">Tudo pago neste mês. ✓</div>`}
+          ${data.monthlyCharge ? `
+            <div class="flex-between" style="padding:10px 0; border-bottom:1px solid var(--border);">
+              <span>Mensalidade de ${MONTH_NAMES[viewMonth - 1]}</span>
+              <span class="flex gap-8">
+                <span class="tabular">${formatCurrency(data.monthlyCharge.value)}</span>
+                ${data.monthlyCharge.status === 'paid' ? '<span class="badge badge-confirmed">Pago</span>' : '<span class="badge badge-pending">Pendente</span>'}
+              </span>
+            </div>` : ''}
+          ${data.classes.length === 0 ? `<div class="empty-state">Nenhuma aula neste mês.</div>` : `
+          <div class="table-wrap"><table>
+            <thead><tr><th>Data</th><th>Disciplina</th><th>Professor</th><th class="num">Valor</th><th>Status</th></tr></thead>
+            <tbody>${data.classes.map(c => `
+              <tr>
+                <td>${formatDate(c.start_time)}</td>
+                <td>${escapeHtml(c.subject_name)}</td>
+                <td>${escapeHtml(c.teacher_name)}</td>
+                <td class="num tabular">${formatCurrency(c.student_value)}</td>
+                <td>${c.student_paid ? '<span class="badge badge-confirmed">Pago</span>' : '<span class="badge badge-pending">Pendente</span>'}</td>
+              </tr>`).join('')}</tbody>
+          </table></div>`}
+        </div>
+      `;
+      document.getElementById('hist-prev-month').addEventListener('click', () => {
+        viewMonth--; if (viewMonth < 1) { viewMonth = 12; viewYear--; }
+        renderStudentMonth();
+      });
+      document.getElementById('hist-next-month').addEventListener('click', () => {
+        viewMonth++; if (viewMonth > 12) { viewMonth = 1; viewYear++; }
+        renderStudentMonth();
+      });
+    }
+
+    async function renderGeneral() {
+      generalEl.innerHTML = `<div class="card"><div class="loading-dots">Carregando…</div></div>`;
+      const rows = await api.get('/api/payments/history');
+      generalEl.innerHTML = `
+        <div class="card">
+          <div class="card-header"><h2>Histórico geral de pagamentos e recebimentos</h2></div>
+          ${rows.length === 0 ? `<div class="empty-state">Nada no histórico ainda.</div>` : `
+          <div class="table-wrap"><table>
+            <thead><tr><th>Tipo</th><th>Nome</th><th>Referência</th><th class="num">Valor</th><th>Data</th></tr></thead>
+            <tbody>${rows.map(r => `
+              <tr>
+                <td><span class="badge badge-neutral">${typeLabel(r.type)}</span></td>
+                <td>${escapeHtml(r.name)}</td>
+                <td>${escapeHtml(String(r.reference_date || '').slice(0, 10))}</td>
+                <td class="num tabular">${formatCurrency(r.value)}</td>
+                <td>${r.paid_at ? formatDateTime(r.paid_at) : '—'}</td>
+              </tr>`).join('')}</tbody>
+          </table></div>`}
+        </div>
+      `;
+    }
+
+    renderGeneral();
   }
 
   renderTab();

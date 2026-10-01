@@ -109,6 +109,7 @@ function register(router) {
   // ---- DESPESAS ----
   router.get('/api/expenses', async (req, res) => {
     requireAuth(req);
+    svc.runPeriodicChecks(db);
     const rows = db.prepare("SELECT * FROM expenses WHERE status = 'pending' ORDER BY due_date IS NULL, due_date, created_at DESC").all();
     sendJson(res, 200, rows);
   });
@@ -149,6 +150,94 @@ function register(router) {
     requireAuth(req);
     db.prepare('DELETE FROM expenses WHERE id = ?').run(req.params.id);
     sendJson(res, 200, { ok: true });
+  });
+
+  // ---- DESPESAS RECORRENTES (assinaturas mensais etc.) ----
+  router.get('/api/expenses/recurring', async (req, res) => {
+    requireAuth(req);
+    sendJson(res, 200, db.prepare('SELECT * FROM recurring_expenses WHERE active = 1 ORDER BY description').all());
+  });
+
+  router.post('/api/expenses/recurring', async (req, res) => {
+    requireAuth(req);
+    const b = req.body;
+    if (!b.description || !b.description.trim()) throw httpError(400, 'Descrição é obrigatória');
+    const day = Math.min(31, Math.max(1, Number(b.day_of_month) || 1));
+    const info = db.prepare('INSERT INTO recurring_expenses (description, value, day_of_month) VALUES (?, ?, ?)')
+      .run(b.description.trim(), Number(b.value) || 0, day);
+    svc.ensureRecurringExpensesGenerated(db);
+    sendJson(res, 201, db.prepare('SELECT * FROM recurring_expenses WHERE id = ?').get(info.lastInsertRowid));
+  });
+
+  router.put('/api/expenses/recurring/:id', async (req, res) => {
+    requireAuth(req);
+    const b = req.body;
+    const existing = db.prepare('SELECT * FROM recurring_expenses WHERE id = ?').get(req.params.id);
+    if (!existing) throw httpError(404, 'Despesa recorrente não encontrada');
+    if (!b.description || !b.description.trim()) throw httpError(400, 'Descrição é obrigatória');
+    const day = Math.min(31, Math.max(1, Number(b.day_of_month) || existing.day_of_month));
+    db.prepare('UPDATE recurring_expenses SET description=?, value=?, day_of_month=? WHERE id=?')
+      .run(b.description.trim(), Number(b.value) || 0, day, req.params.id);
+    svc.syncRecurringExpenseCurrentMonth(db, req.params.id);
+    sendJson(res, 200, db.prepare('SELECT * FROM recurring_expenses WHERE id = ?').get(req.params.id));
+  });
+
+  // "Excluir" só desativa — para de gerar despesas novas, mas as que já existem (inclusive
+  // pendentes) continuam, porque já são compromissos reais daquele mês.
+  router.delete('/api/expenses/recurring/:id', async (req, res) => {
+    requireAuth(req);
+    db.prepare('UPDATE recurring_expenses SET active = 0 WHERE id = ?').run(req.params.id);
+    sendJson(res, 200, { ok: true });
+  });
+
+  // ---- Busca por aluno/responsável (Histórico → "quais aulas esse aluno já pagou?") ----
+  router.get('/api/payments/student-search', async (req, res) => {
+    requireAuth(req);
+    const q = (req.query.q || '').trim();
+    if (!q) { sendJson(res, 200, []); return; }
+    const like = `%${q}%`;
+    sendJson(res, 200, db.prepare(
+      `SELECT id, name, guardian_name, monthly_payment FROM students
+       WHERE active = 1 AND (name LIKE ? OR guardian_name LIKE ?) ORDER BY name`
+    ).all(like, like));
+  });
+
+  // Aulas (e mensalidade, se for o caso) de UM aluno, num mês específico, com status de pagamento.
+  router.get('/api/payments/student/:id/month', async (req, res) => {
+    requireAuth(req);
+    const student = db.prepare('SELECT * FROM students WHERE id = ?').get(req.params.id);
+    if (!student) throw httpError(404, 'Aluno não encontrado');
+    const now = new Date();
+    const year = Number(req.query.year) || now.getFullYear();
+    const month = Number(req.query.month) || (now.getMonth() + 1);
+    const pad = (n) => String(n).padStart(2, '0');
+    const lastDay = new Date(year, month, 0).getDate();
+    const start = `${year}-${pad(month)}-01 00:00:00`;
+    const end = `${year}-${pad(month)}-${pad(lastDay)} 23:59:59`;
+
+    const classes = db.prepare(`
+      SELECT classes.*, subjects.name AS subject_name, teachers.name AS teacher_name
+      FROM classes
+      JOIN subjects ON subjects.id = classes.subject_id
+      JOIN teachers ON teachers.id = classes.teacher_id
+      WHERE classes.student_id = ? AND classes.status = 'scheduled'
+        AND classes.start_time >= ? AND classes.start_time <= ?
+      ORDER BY classes.start_time
+    `).all(req.params.id, start, end);
+
+    let monthlyCharge = null;
+    if (student.monthly_payment) {
+      monthlyCharge = db.prepare(
+        'SELECT * FROM monthly_charges WHERE student_id = ? AND year = ? AND month = ?'
+      ).get(req.params.id, year, month) || null;
+    }
+
+    sendJson(res, 200, {
+      student: { id: student.id, name: student.name, guardian_name: student.guardian_name, monthly_payment: !!student.monthly_payment },
+      year, month,
+      classes: classes.map(c => ({ ...c, student_paid: !!c.student_paid })),
+      monthlyCharge,
+    });
   });
 
   // ---- HISTÓRICO / RELATÓRIO (tudo que já foi pago/recebido) ----

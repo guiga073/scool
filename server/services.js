@@ -158,6 +158,7 @@ function ensureMonthlyChargesGenerated(db) {
 function runPeriodicChecks(db) {
   ensureAllInvoicesGenerated(db);
   ensureMonthlyChargesGenerated(db);
+  ensureRecurringExpensesGenerated(db);
 }
 
 // ---------- Aulas recorrentes (acompanhamento) ----------
@@ -190,7 +191,55 @@ function buildRecurringOccurrences({ dayOfWeek, startTime, endTime, startDate, e
   return occurrences;
 }
 
-// ---------- Feedback de aula (professor -> aluno) ----------
+// ---------- Despesas recorrentes (assinaturas mensais etc.) ----------
+
+function clampDayOfMonth(year, month, day) {
+  // month aqui é 1-indexado (1=Janeiro). new Date(year, month, 0) dá o último dia do mês "month".
+  const lastDay = new Date(year, month, 0).getDate();
+  return Math.min(day, lastDay);
+}
+
+// Garante que todo gabarito ativo tenha uma despesa gerada para o mês atual.
+function ensureRecurringExpensesGenerated(db) {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1;
+  const pad = (n) => String(n).padStart(2, '0');
+  const monthPrefix = `${year}-${pad(month)}-`;
+
+  const templates = db.prepare('SELECT * FROM recurring_expenses WHERE active = 1').all();
+  for (const t of templates) {
+    const existing = db.prepare(
+      `SELECT id FROM expenses WHERE recurring_expense_id = ? AND due_date LIKE ?`
+    ).get(t.id, `${monthPrefix}%`);
+    if (existing) continue;
+    const day = clampDayOfMonth(year, month, t.day_of_month);
+    db.prepare(
+      `INSERT INTO expenses (description, value, due_date, recurring_expense_id) VALUES (?, ?, ?, ?)`
+    ).run(t.description, t.value, `${monthPrefix}${pad(day)}`, t.id);
+  }
+}
+
+// Se o gabarito for editado e a despesa deste mês ainda estiver pendente, atualiza ela
+// junto — igual ao que já faço com as faturas de professor. Se já tiver sido paga, não mexe.
+function syncRecurringExpenseCurrentMonth(db, templateId) {
+  const t = db.prepare('SELECT * FROM recurring_expenses WHERE id = ?').get(templateId);
+  if (!t) return;
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1;
+  const pad = (n) => String(n).padStart(2, '0');
+  const monthPrefix = `${year}-${pad(month)}-`;
+  const existing = db.prepare(
+    `SELECT * FROM expenses WHERE recurring_expense_id = ? AND due_date LIKE ?`
+  ).get(t.id, `${monthPrefix}%`);
+  if (!existing || existing.status === 'paid') return;
+  const day = clampDayOfMonth(year, month, t.day_of_month);
+  db.prepare('UPDATE expenses SET description = ?, value = ?, due_date = ? WHERE id = ?')
+    .run(t.description, t.value, `${monthPrefix}${pad(day)}`, existing.id);
+}
+
+
 
 // Um professor só pode ver/adicionar feedback de alunos com quem ele realmente já teve aula.
 function teacherHasStudent(db, teacherId, studentId) {
@@ -285,6 +334,93 @@ function recalculateHistoricalValues(db) {
   return { totalClasses: classes.length, updated, skipped: classes.length - updated, skippedTeachers: Array.from(skippedTeachers) };
 }
 
+// ---------- Relatório financeiro ----------
+
+// Receita, custos e lucro de um único mês (ref = qualquer Date dentro do mês desejado).
+// "Até agora" quando o mês ainda está em andamento — não conta aulas futuras dentro do
+// mesmo mês que ainda não aconteceram.
+function monthFinancials(db, ref) {
+  const pad = (n) => String(n).padStart(2, '0');
+  const year = ref.getFullYear();
+  const month = ref.getMonth(); // 0-indexed
+  const lastDay = new Date(year, month + 1, 0).getDate();
+  const monthStart = `${year}-${pad(month + 1)}-01 00:00:00`;
+  const naturalEnd = `${year}-${pad(month + 1)}-${pad(lastDay)} 23:59:59`;
+  const now = new Date();
+  const nowStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+  const effectiveEnd = nowStr < naturalEnd ? nowStr : naturalEnd;
+
+  const classRevenue = db.prepare(`
+    SELECT COALESCE(SUM(classes.student_value), 0) AS total
+    FROM classes JOIN students ON students.id = classes.student_id
+    WHERE classes.status = 'scheduled' AND students.monthly_payment = 0
+      AND classes.start_time >= ? AND classes.start_time <= ?
+  `).get(monthStart, effectiveEnd).total;
+
+  const monthlyRevenue = db.prepare(
+    `SELECT COALESCE(SUM(value), 0) AS total FROM monthly_charges WHERE year = ? AND month = ?`
+  ).get(year, month + 1).total;
+
+  const teacherCosts = db.prepare(`
+    SELECT COALESCE(SUM(teacher_value + transport_value), 0) AS total
+    FROM classes WHERE status = 'scheduled' AND start_time >= ? AND start_time <= ?
+  `).get(monthStart, effectiveEnd).total;
+
+  const expenseCosts = db.prepare(`
+    SELECT COALESCE(SUM(value), 0) AS total FROM expenses
+    WHERE COALESCE(due_date, date(created_at)) >= ? AND COALESCE(due_date, date(created_at)) <= ?
+  `).get(monthStart.slice(0, 10), effectiveEnd.slice(0, 10)).total;
+
+  const revenue = round2(classRevenue + monthlyRevenue);
+  const totalCosts = round2(teacherCosts + expenseCosts);
+  return {
+    year, month: month + 1,
+    revenue, teacherCosts: round2(teacherCosts), expenseCosts: round2(expenseCosts),
+    totalCosts, profit: round2(revenue - totalCosts),
+  };
+}
+
+// Série dos últimos N meses (incluindo o atual, parcial).
+function monthlyFinancialSeries(db, monthsBack) {
+  const now = new Date();
+  const out = [];
+  for (let i = monthsBack - 1; i >= 0; i--) {
+    out.push(monthFinancials(db, new Date(now.getFullYear(), now.getMonth() - i, 1)));
+  }
+  return out;
+}
+
+// Para um mês específico: faturamento por disciplina e custo por professor —
+// as listas de "o que está puxando o resultado" daquele mês.
+function monthBreakdown(db, ref) {
+  const pad = (n) => String(n).padStart(2, '0');
+  const year = ref.getFullYear();
+  const month = ref.getMonth();
+  const lastDay = new Date(year, month + 1, 0).getDate();
+  const monthStart = `${year}-${pad(month + 1)}-01 00:00:00`;
+  const monthEnd = `${year}-${pad(month + 1)}-${pad(lastDay)} 23:59:59`;
+
+  const bySubject = db.prepare(`
+    SELECT subjects.name AS label, COALESCE(SUM(classes.student_value), 0) AS value
+    FROM classes
+    JOIN subjects ON subjects.id = classes.subject_id
+    JOIN students ON students.id = classes.student_id
+    WHERE classes.status = 'scheduled' AND students.monthly_payment = 0
+      AND classes.start_time >= ? AND classes.start_time <= ?
+    GROUP BY subjects.id HAVING value > 0 ORDER BY value DESC LIMIT 8
+  `).all(monthStart, monthEnd).map(r => ({ label: r.label, value: round2(r.value) }));
+
+  const byTeacher = db.prepare(`
+    SELECT teachers.name AS label, COALESCE(SUM(classes.teacher_value + classes.transport_value), 0) AS value
+    FROM classes
+    JOIN teachers ON teachers.id = classes.teacher_id
+    WHERE classes.status = 'scheduled' AND classes.start_time >= ? AND classes.start_time <= ?
+    GROUP BY teachers.id HAVING value > 0 ORDER BY value DESC LIMIT 8
+  `).all(monthStart, monthEnd).map(r => ({ label: r.label, value: round2(r.value) }));
+
+  return { bySubject, byTeacher };
+}
+
 module.exports = {
   getQuinzenaPeriods,
   quinzenaForDate,
@@ -302,4 +438,10 @@ module.exports = {
   deleteFeedback,
   findLoginEmailConflict,
   recalculateHistoricalValues,
+  monthFinancials,
+  monthlyFinancialSeries,
+  monthBreakdown,
+  clampDayOfMonth,
+  ensureRecurringExpensesGenerated,
+  syncRecurringExpenseCurrentMonth,
 };

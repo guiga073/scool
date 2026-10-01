@@ -183,19 +183,6 @@ você antes de colocar algo assim no ar). Enquanto isso, a restauração manual 
 possível por um terminal (Shell) no painel da Railway, substituindo o arquivo
 `data/sistema.db` pelo seu backup e reiniciando o serviço.
 
-### Recalcular valores das aulas já agendadas (ferramenta de uso único)
-
-No mesmo rodapé do menu, tem o botão **"Recalcular valores das aulas já agendadas"**.
-Ele existe para o caso de você ter aulas cadastradas de antes de preencher o valor/hora
-e o transporte dos professores: um clique (com uma confirmação explicando exatamente o
-que vai mudar) aplica o valor/hora e o transporte **atuais** de cada professor em
-**todas** as aulas já agendadas, usando a modalidade de cada uma para saber se usa o
-valor presencial ou online. Professor sem valor/hora cadastrado para aquela modalidade
-fica de fora (a aula não é alterada) — e o resultado te diz exatamente quantas aulas
-mudaram e quais professores ficaram de fora, para você completar o cadastro deles se
-quiser. Faturas quinzenais já marcadas como pagas nunca são alteradas por essa
-ferramenta, mesmo que o valor da aula por trás delas mude.
-
 ---
 
 ## 5. Um tour rápido pelas funcionalidades
@@ -247,6 +234,15 @@ ferramenta, mesmo que o valor da aula por trás delas mude.
   já indicando qual professor escreveu) e "Por professor" (busca um professor e vê o
   feedback que ele deu para todos os alunos dele). Tem o mesmo botão "Ver como texto" e
   a opção de excluir um item, se precisar.
+- **Financeiro** — visão geral do negócio: receita, custos e lucro do mês atual (até
+  agora), um gráfico comparando os últimos 6 ou 12 meses, e dois rankings do mês —
+  faturamento por disciplina e custo por professor (aulas + transporte), para ver o que
+  está puxando o resultado. A receita conta as aulas avulsas pelo valor que o aluno
+  paga, mais as mensalidades dos alunos de pagamento mensal; o custo conta o que é
+  pago aos professores (incluindo transporte) mais as despesas gerais lançadas em
+  Pagamentos → Despesas. Tudo calculado pela data da aula/despesa, não pela data em que
+  foi marcada como paga — então reflete o que foi de fato prestado/gasto naquele mês,
+  mesmo que o pagamento em si ainda esteja pendente.
 - **Agendamento** — ao marcar uma aula você escolhe aluno → modalidade → disciplina →
   professor (a lista de professores já vem filtrada pela disciplina escolhida) → data e
   horário → valores → link da aula. Quando a modalidade é **presencial**, o formulário e
@@ -258,9 +254,21 @@ ferramenta, mesmo que o valor da aula por trás delas mude.
   de todos os cálculos e telas.
 - **Pagamentos** — abas para "A receber" (aulas avulsas pendentes), "A pagar"
   (faturas quinzenais dos professores, geradas automaticamente ao fim de cada
-  quinzena), "Pagamentos especiais" (mensalistas), "Despesas" (contas gerais) e
-  "Histórico". Nada pendente desaparece sozinho — só some da lista de pendentes quando
-  você marca como recebido/pago.
+  quinzena), "Pagamentos especiais" (mensalistas), "Despesas" e "Histórico". Nada
+  pendente desaparece sozinho — só some da lista de pendentes quando você marca como
+  recebido/pago.
+  - Em **Despesas**, além de lançar uma despesa avulsa, dá para cadastrar **despesas
+    recorrentes** (assinaturas mensais, aluguel, etc.): você define descrição, valor e
+    o dia do mês, e a partir daí uma despesa é gerada sozinha todo mês naquele dia —
+    você só marca como paga quando quitar. Editar o valor do gabarito atualiza a
+    despesa deste mês automaticamente, mas só se ela ainda não tiver sido paga (uma já
+    paga nunca muda, igual às faturas de professor). "Desativar" para as gerações
+    futuras sem apagar o que já existe.
+  - Em **Histórico**, dá para buscar por **nome do aluno ou do responsável** e ver,
+    mês a mês (com setas pra navegar entre meses), quais aulas daquele aluno já foram
+    pagas e quais ainda estão pendentes — incluindo a mensalidade, se for aluno de
+    pagamento mensal. Sem busca, a tela mostra o histórico geral de tudo que já foi
+    pago/recebido, como antes.
 
 ### Sobre o link da aula (Google Meet)
 

@@ -146,6 +146,15 @@ CREATE TABLE IF NOT EXISTS class_feedback (
 
 CREATE INDEX IF NOT EXISTS idx_feedback_teacher_student ON class_feedback(teacher_id, student_id);
 
+CREATE TABLE IF NOT EXISTS recurring_expenses (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  description TEXT NOT NULL,
+  value REAL NOT NULL DEFAULT 0,
+  day_of_month INTEGER NOT NULL DEFAULT 1,
+  active INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
 CREATE TABLE IF NOT EXISTS expenses (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   description TEXT NOT NULL,
@@ -153,6 +162,7 @@ CREATE TABLE IF NOT EXISTS expenses (
   due_date TEXT,
   status TEXT NOT NULL DEFAULT 'pending',
   paid_at TEXT,
+  recurring_expense_id INTEGER REFERENCES recurring_expenses(id),
   created_at TEXT DEFAULT (datetime('now'))
 );
 `);
@@ -177,6 +187,7 @@ ensureColumn('teachers', 'hourly_rate_online', 'REAL');
 // R$10 configurado para todo mundo que já existia no banco.
 ensureColumn('teachers', 'transport_value', 'REAL DEFAULT 10');
 ensureColumn('classes', 'transport_value', 'REAL DEFAULT 0');
+ensureColumn('expenses', 'recurring_expense_id', 'INTEGER REFERENCES recurring_expenses(id)');
 
 // A tabela de sessões mudou de "sempre admin" (admin_id) para "admin ou professor"
 // (user_type + user_id). Sessões são só tokens de login temporários — se o formato

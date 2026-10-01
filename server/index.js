@@ -38,7 +38,7 @@ require('./routes/payments').register(router);
 require('./routes/teacherPortal').register(router);
 require('./routes/studentPortal').register(router);
 require('./routes/backup').register(router);
-require('./routes/adminTools').register(router);
+require('./routes/finance').register(router);
 
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 const PORT = process.env.PORT || 3000;
