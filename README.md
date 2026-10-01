@@ -268,7 +268,14 @@ possível por um terminal (Shell) no painel da Railway, substituindo o arquivo
     mês a mês (com setas pra navegar entre meses), quais aulas daquele aluno já foram
     pagas e quais ainda estão pendentes — incluindo a mensalidade, se for aluno de
     pagamento mensal. Sem busca, a tela mostra o histórico geral de tudo que já foi
-    pago/recebido, como antes.
+    pago/recebido, como antes. Cada item do histórico geral tem um botão **"Excluir"**,
+    que remove de vez (não é só "desmarcar como pago" — some do registro e de todos os
+    cálculos). Excluir uma aula paga cancela ela por completo, como na agenda. Único
+    cuidado: excluir a **fatura de um professor** (não a aula em si) só impede que o
+    valor volte a aparecer se você também cancelar as aulas daquela quinzena — do
+    contrário, como o valor ainda é devido com base nelas, uma fatura pendente pode
+    ser gerada de novo automaticamente (isso só vale para quinzenas de até 3 meses
+    atrás; mais antigas que isso não voltam).
 
 ### Sobre o link da aula (Google Meet)
 

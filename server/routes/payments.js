@@ -69,6 +69,12 @@ function register(router) {
     sendJson(res, 200, { ok: true });
   });
 
+  router.delete('/api/payments/monthly-charge/:id', async (req, res) => {
+    requireAuth(req);
+    db.prepare('DELETE FROM monthly_charges WHERE id = ?').run(req.params.id);
+    sendJson(res, 200, { ok: true });
+  });
+
   // ---- A PAGAR (faturas quinzenais dos professores) ----
   router.get('/api/payments/payable', async (req, res) => {
     requireAuth(req);
@@ -103,6 +109,12 @@ function register(router) {
   router.post('/api/payments/invoice/:id/mark-pending', async (req, res) => {
     requireAuth(req);
     db.prepare("UPDATE teacher_invoices SET status = 'pending', paid_at = NULL WHERE id = ?").run(req.params.id);
+    sendJson(res, 200, { ok: true });
+  });
+
+  router.delete('/api/payments/invoice/:id', async (req, res) => {
+    requireAuth(req);
+    db.prepare('DELETE FROM teacher_invoices WHERE id = ?').run(req.params.id);
     sendJson(res, 200, { ok: true });
   });
 

@@ -6,6 +6,26 @@ function typeLabel(type) {
   return { aula: 'Aula', mensalidade: 'Mensalidade', fatura_professor: 'Fatura de professor', despesa: 'Despesa' }[type] || type;
 }
 
+async function deleteHistoryItem(type, id) {
+  const messages = {
+    aula: 'Excluir esta aula do histórico? Ela será removida de tudo — calendários, pagamentos e cálculos de quinzena — como se nunca tivesse existido.',
+    mensalidade: 'Excluir esta mensalidade do histórico?',
+    fatura_professor: 'Excluir esta fatura do histórico? Se as aulas daquela quinzena ainda estiverem no sistema (e a quinzena for de até 3 meses atrás), uma nova fatura pendente pode ser gerada automaticamente de novo, já que o valor continua sendo devido ao professor com base nessas aulas. Para que o valor não volte, cancele também as aulas correspondentes, em Agendamento.',
+    despesa: 'Excluir esta despesa do histórico?',
+  };
+  const endpoints = {
+    aula: `/api/classes/${id}`,
+    mensalidade: `/api/payments/monthly-charge/${id}`,
+    fatura_professor: `/api/payments/invoice/${id}`,
+    despesa: `/api/expenses/${id}`,
+  };
+  const ok = await confirmModal(`${messages[type]} Essa ação não pode ser desfeita.`, 'Excluir');
+  if (!ok) return;
+  await api.delete(endpoints[type]);
+  showToast('Excluído do histórico.');
+  return true;
+}
+
 Pages.payments = async function (root) {
   let currentTab = 'receber';
   root.innerHTML = `
@@ -414,7 +434,7 @@ Pages.payments = async function (root) {
           <div class="card-header"><h2>Histórico geral de pagamentos e recebimentos</h2></div>
           ${rows.length === 0 ? `<div class="empty-state">Nada no histórico ainda.</div>` : `
           <div class="table-wrap"><table>
-            <thead><tr><th>Tipo</th><th>Nome</th><th>Referência</th><th class="num">Valor</th><th>Data</th></tr></thead>
+            <thead><tr><th>Tipo</th><th>Nome</th><th>Referência</th><th class="num">Valor</th><th>Data</th><th></th></tr></thead>
             <tbody>${rows.map(r => `
               <tr>
                 <td><span class="badge badge-neutral">${typeLabel(r.type)}</span></td>
@@ -422,10 +442,17 @@ Pages.payments = async function (root) {
                 <td>${escapeHtml(String(r.reference_date || '').slice(0, 10))}</td>
                 <td class="num tabular">${formatCurrency(r.value)}</td>
                 <td>${r.paid_at ? formatDateTime(r.paid_at) : '—'}</td>
+                <td><button class="btn-text text-sm" data-del-hist="${r.id}" data-type="${r.type}">Excluir</button></td>
               </tr>`).join('')}</tbody>
           </table></div>`}
         </div>
       `;
+      generalEl.querySelectorAll('[data-del-hist]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const deleted = await deleteHistoryItem(btn.dataset.type, btn.dataset.delHist);
+          if (deleted) renderGeneral();
+        });
+      });
     }
 
     renderGeneral();
