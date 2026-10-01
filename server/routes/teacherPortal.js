@@ -63,13 +63,16 @@ function register(router) {
     const { first, second } = svc.getQuinzenaPeriods(now.getFullYear(), now.getMonth());
     const firstTotals = svc.calcPeriodTotals(db, me.id, first.start, first.end);
     const secondTotals = svc.calcPeriodTotals(db, me.id, second.start, second.end);
+    // O total já inclui o transporte corretamente — só o detalhamento (quanto é hora e
+    // quanto é transporte) fica de fora, pelo mesmo motivo de o valor/hora não aparecer aqui.
+    const hideBreakdown = ({ totalTransport, ...rest }) => rest;
 
     const invoices = db.prepare(
       'SELECT * FROM teacher_invoices WHERE teacher_id = ? ORDER BY period_start DESC'
     ).all(me.id);
 
     sendJson(res, 200, {
-      currentPeriods: { first: { ...first, ...firstTotals }, second: { ...second, ...secondTotals } },
+      currentPeriods: { first: { ...first, ...hideBreakdown(firstTotals) }, second: { ...second, ...hideBreakdown(secondTotals) } },
       invoices,
     });
   });

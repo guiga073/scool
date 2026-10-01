@@ -119,6 +119,11 @@ async function openClassFormModal(options, onSaved) {
         <div class="field"><label for="cf-teacher-value">Valor pago ao professor (R$)</label><input type="number" step="0.01" min="0" id="cf-teacher-value" value="${existing ? existing.teacher_value : ''}" required>
           <div class="hint">Preenchido automaticamente a partir do valor/hora cadastrado do professor — pode editar livremente.</div></div>
       </div>
+      <div class="field hidden" id="cf-transport-wrap">
+        <label for="cf-transport-value">Transporte (R$)</label>
+        <input type="number" step="0.01" min="0" id="cf-transport-value" value="${existing ? existing.transport_value : ''}">
+        <div class="hint">Valor fixo por aula, preenchido a partir do transporte cadastrado do professor — pode editar. Só se aplica a aulas presenciais.</div>
+      </div>
       <div class="field"><label for="cf-link">Link da aula (Google Meet ou outra plataforma)</label>
         <input type="text" id="cf-link" placeholder="https://meet.google.com/…" value="${escapeHtml(existing && existing.meeting_link || '')}"></div>
 
@@ -141,6 +146,7 @@ async function openClassFormModal(options, onSaved) {
     teacherSelect.innerHTML = teacherOptions(subjectSelect.value);
     updateRateDisplay();
     autoFillTeacherValue();
+    autoFillTransportValue();
   });
 
   const studentSelect = backdrop.querySelector('#cf-student');
@@ -156,8 +162,22 @@ async function openClassFormModal(options, onSaved) {
     addressDisplay.textContent = student.address ? student.address : `${student.name} não tem endereço cadastrado — adicione em Alunos para que apareça aqui.`;
   }
   studentSelect.addEventListener('change', updateAddressDisplay);
-  modalitySelect.addEventListener('change', () => { updateAddressDisplay(); autoFillTeacherValue(); });
+  modalitySelect.addEventListener('change', () => { updateAddressDisplay(); updateTransportVisibility(); autoFillTeacherValue(); autoFillTransportValue(); });
   updateAddressDisplay();
+
+  // Transporte: valor fixo por aula, só para presencial, preenchido a partir do
+  // cadastro do professor — não depende da duração da aula, diferente do valor/hora.
+  const transportWrap = backdrop.querySelector('#cf-transport-wrap');
+  function updateTransportVisibility() {
+    transportWrap.classList.toggle('hidden', modalitySelect.value !== 'presencial');
+  }
+  function autoFillTransportValue() {
+    const transportInput = backdrop.querySelector('#cf-transport-value');
+    if (modalitySelect.value !== 'presencial') { transportInput.value = 0; return; }
+    const teacher = teachers.find(t => String(t.id) === teacherSelect.value);
+    if (teacher && teacher.transport_value != null) transportInput.value = teacher.transport_value;
+  }
+  updateTransportVisibility();
 
   // Mostra o valor/hora cadastrado do professor selecionado (só informativo) e usa esse
   // valor, junto com a modalidade e a duração, para sugerir o valor pago na aula — sem
@@ -185,7 +205,7 @@ async function openClassFormModal(options, onSaved) {
     if (value !== null) backdrop.querySelector('#cf-teacher-value').value = value;
   }
 
-  teacherSelect.addEventListener('change', () => { updateRateDisplay(); autoFillTeacherValue(); });
+  teacherSelect.addEventListener('change', () => { updateRateDisplay(); autoFillTeacherValue(); autoFillTransportValue(); });
   ['#cf-start', '#cf-end', '#cf-start-r', '#cf-end-r'].forEach(sel => {
     backdrop.querySelector(sel).addEventListener('input', autoFillTeacherValue);
   });
@@ -214,6 +234,7 @@ async function openClassFormModal(options, onSaved) {
       modality: backdrop.querySelector('#cf-modality').value,
       student_value: Number(backdrop.querySelector('#cf-student-value').value),
       teacher_value: Number(backdrop.querySelector('#cf-teacher-value').value),
+      transport_value: Number(backdrop.querySelector('#cf-transport-value').value) || 0,
       meeting_link: backdrop.querySelector('#cf-link').value.trim(),
     };
 
@@ -277,7 +298,7 @@ async function openClassDetailModal(cls, onChanged) {
     </div>
     <div class="field-row">
       <div><div class="text-sm muted">Aluno paga</div><p class="tabular">${formatCurrency(cls.student_value)} ${cls.student_paid ? '<span class="badge badge-confirmed">Recebido</span>' : '<span class="badge badge-pending">Pendente</span>'}</p></div>
-      <div><div class="text-sm muted">Professor recebe</div><p class="tabular">${formatCurrency(cls.teacher_value)}</p></div>
+      <div><div class="text-sm muted">Professor recebe</div><p class="tabular">${formatCurrency(cls.teacher_value)}${cls.modality === 'presencial' && Number(cls.transport_value) > 0 ? ` + ${formatCurrency(cls.transport_value)} transporte` : ''}</p></div>
     </div>
     <div class="form-actions">
       <button class="btn btn-danger" id="cd-cancel-class">Cancelar aula</button>

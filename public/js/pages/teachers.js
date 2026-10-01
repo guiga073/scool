@@ -52,6 +52,10 @@ async function teacherFormModal(existing, onSaved) {
           <div class="field mb-0"><label for="tf-rate-online">R$/hora — Online</label>
             <input type="number" step="0.01" min="0" id="tf-rate-online" value="${t.hourly_rate_online != null ? t.hourly_rate_online : ''}" placeholder="Ex.: 40"></div>
         </div>
+        <div class="field" style="margin-top:14px; margin-bottom:0;"><label for="tf-transport">Transporte por aula presencial (R$)</label>
+          <input type="number" step="0.01" min="0" id="tf-transport" value="${existing ? (t.transport_value != null ? t.transport_value : 10) : 10}">
+          <div class="hint">Valor fixo, somado automaticamente em cada aula presencial dele — não depende da duração. Padrão R$10; edite se esse professor receber outro valor.</div>
+        </div>
       </div>
 
       <div class="field"><label>Disponibilidade</label>
@@ -109,6 +113,7 @@ async function teacherFormModal(existing, onSaved) {
       availability_grid: gridApi.getValue(),
       hourly_rate_presencial: backdrop.querySelector('#tf-rate-presencial').value,
       hourly_rate_online: backdrop.querySelector('#tf-rate-online').value,
+      transport_value: backdrop.querySelector('#tf-transport').value,
     };
     try {
       const saved = existing ? await api.put(`/api/teachers/${existing.id}`, payload) : await api.post('/api/teachers', payload);
@@ -240,6 +245,7 @@ Pages.teacherDetail = async function (root, id) {
           <div><div class="text-sm muted">Valor/hora — Presencial (uso interno)</div><p class="tabular">${teacher.hourly_rate_presencial != null ? formatCurrency(teacher.hourly_rate_presencial) : '—'}</p></div>
           <div><div class="text-sm muted">Valor/hora — Online (uso interno)</div><p class="tabular">${teacher.hourly_rate_online != null ? formatCurrency(teacher.hourly_rate_online) : '—'}</p></div>
         </div>
+        <div><div class="text-sm muted">Transporte por aula presencial (uso interno)</div><p class="tabular">${teacher.transport_value != null ? formatCurrency(teacher.transport_value) : '—'}</p></div>
         <div><div class="text-sm muted">Acesso ao sistema</div><p>${teacher.has_login ? `<span class="badge badge-confirmed">Login ativo</span> ${escapeHtml(teacher.login_email)}` : '<span class="badge badge-neutral">Sem acesso configurado</span>'}</p></div>
       </div>
     `;
@@ -294,10 +300,10 @@ Pages.teacherDetail = async function (root, id) {
       <div class="stat-grid">
         <div class="stat-card"><div class="stat-label">1ª quinzena (dia 1 a 15) — em andamento</div>
           <div class="stat-value accent tabular">${formatCurrency(first.totalValue)}</div>
-          <div class="text-sm muted">${first.totalHours}h dadas até agora</div></div>
+          <div class="text-sm muted">${first.totalHours}h dadas · ${formatCurrency(first.totalTransport)} em transporte</div></div>
         <div class="stat-card"><div class="stat-label">2ª quinzena (dia 16 ao fim do mês) — em andamento</div>
           <div class="stat-value accent tabular">${formatCurrency(second.totalValue)}</div>
-          <div class="text-sm muted">${second.totalHours}h dadas até agora</div></div>
+          <div class="text-sm muted">${second.totalHours}h dadas · ${formatCurrency(second.totalTransport)} em transporte</div></div>
       </div>
       <div class="card">
         <div class="card-header"><h2>Faturas geradas</h2></div>

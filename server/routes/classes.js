@@ -58,11 +58,11 @@ function register(router) {
     });
 
     const info = db.prepare(`
-      INSERT INTO classes (student_id, teacher_id, subject_id, modality, start_time, end_time, student_value, teacher_value, meeting_link)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO classes (student_id, teacher_id, subject_id, modality, start_time, end_time, student_value, teacher_value, transport_value, meeting_link)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       b.student_id, b.teacher_id, b.subject_id, b.modality, b.start_time, b.end_time,
-      Number(b.student_value) || 0, Number(b.teacher_value) || 0, b.meeting_link || null
+      Number(b.student_value) || 0, Number(b.teacher_value) || 0, Number(b.transport_value) || 0, b.meeting_link || null
     );
 
     svc.syncInvoiceForDate(db, b.teacher_id, new Date(b.start_time.replace(' ', 'T')));
@@ -94,8 +94,8 @@ function register(router) {
     const conflictsByDate = [];
 
     const insert = db.prepare(`
-      INSERT INTO classes (student_id, teacher_id, subject_id, modality, start_time, end_time, student_value, teacher_value, meeting_link, recurrence_group_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO classes (student_id, teacher_id, subject_id, modality, start_time, end_time, student_value, teacher_value, transport_value, meeting_link, recurrence_group_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     for (const occ of occurrences) {
@@ -104,7 +104,7 @@ function register(router) {
       });
       const info = insert.run(
         b.student_id, b.teacher_id, b.subject_id, b.modality, occ.startTime, occ.endTime,
-        Number(b.student_value) || 0, Number(b.teacher_value) || 0, b.meeting_link || null, groupId
+        Number(b.student_value) || 0, Number(b.teacher_value) || 0, Number(b.transport_value) || 0, b.meeting_link || null, groupId
       );
       created.push(info.lastInsertRowid);
       if (conflicts.length > 0) conflictsByDate.push({ date: occ.startTime, conflicts });
@@ -129,11 +129,11 @@ function register(router) {
 
     db.prepare(`
       UPDATE classes SET student_id=?, teacher_id=?, subject_id=?, modality=?, start_time=?, end_time=?,
-        student_value=?, teacher_value=?, meeting_link=?, updated_at=datetime('now')
+        student_value=?, teacher_value=?, transport_value=?, meeting_link=?, updated_at=datetime('now')
       WHERE id=?
     `).run(
       b.student_id, b.teacher_id, b.subject_id, b.modality, b.start_time, b.end_time,
-      Number(b.student_value) || 0, Number(b.teacher_value) || 0, b.meeting_link || null, req.params.id
+      Number(b.student_value) || 0, Number(b.teacher_value) || 0, Number(b.transport_value) || 0, b.meeting_link || null, req.params.id
     );
 
     // Recalcula faturas afetadas: período antigo (se o professor ou a data mudaram) e o período novo

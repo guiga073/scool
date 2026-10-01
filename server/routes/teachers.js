@@ -46,6 +46,15 @@ function parseRate(value) {
   return n;
 }
 
+// Transporte sempre tem um valor (padrão R$10) — diferente do valor/hora, que pode
+// legitimamente ficar em branco para um professor que não dá aula presencial.
+function parseTransportValue(value) {
+  if (value === undefined || value === null || value === '') return 10;
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 0) throw httpError(400, 'Valor de transporte inválido');
+  return n;
+}
+
 function register(router) {
   router.get('/api/teachers', async (req, res) => {
     requireAuth(req);
@@ -66,13 +75,13 @@ function register(router) {
     if (loginEmail && !b.login_password) throw httpError(400, 'Defina uma senha de acesso para o professor');
 
     const info = db.prepare(`
-      INSERT INTO teachers (name, address, phone, pix, availability, availability_grid, login_email, password_hash, hourly_rate_presencial, hourly_rate_online)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO teachers (name, address, phone, pix, availability, availability_grid, login_email, password_hash, hourly_rate_presencial, hourly_rate_online, transport_value)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       b.name.trim(), b.address || null, b.phone || null, b.pix || null, b.availability || null,
       b.availability_grid ? JSON.stringify(b.availability_grid) : null,
       loginEmail, b.login_password ? hashPassword(b.login_password) : null,
-      parseRate(b.hourly_rate_presencial), parseRate(b.hourly_rate_online)
+      parseRate(b.hourly_rate_presencial), parseRate(b.hourly_rate_online), parseTransportValue(b.transport_value)
     );
     setTeacherSubjects(info.lastInsertRowid, b.subject_ids);
     const row = db.prepare('SELECT * FROM teachers WHERE id = ?').get(info.lastInsertRowid);
@@ -134,12 +143,12 @@ function register(router) {
 
     db.prepare(`
       UPDATE teachers SET name=?, address=?, phone=?, pix=?, availability=?, availability_grid=?,
-        login_email=?, password_hash=?, hourly_rate_presencial=?, hourly_rate_online=?
+        login_email=?, password_hash=?, hourly_rate_presencial=?, hourly_rate_online=?, transport_value=?
       WHERE id=?
     `).run(
       b.name.trim(), b.address || null, b.phone || null, b.pix || null, b.availability || null,
       b.availability_grid ? JSON.stringify(b.availability_grid) : existing.availability_grid,
-      loginEmail, passwordHash, parseRate(b.hourly_rate_presencial), parseRate(b.hourly_rate_online),
+      loginEmail, passwordHash, parseRate(b.hourly_rate_presencial), parseRate(b.hourly_rate_online), parseTransportValue(b.transport_value),
       req.params.id
     );
     setTeacherSubjects(req.params.id, b.subject_ids);

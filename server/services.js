@@ -55,19 +55,22 @@ function findConflicts(db, { teacherId, studentId, startTime, endTime, excludeCl
 
 function calcPeriodTotals(db, teacherId, periodStart, periodEnd) {
   const rows = db.prepare(
-    `SELECT teacher_value, start_time, end_time FROM classes
+    `SELECT teacher_value, transport_value, start_time, end_time FROM classes
      WHERE teacher_id = ? AND status = 'scheduled' AND start_time >= ? AND start_time <= ?`
   ).all(teacherId, periodStart, periodEnd);
 
   let totalValue = 0;
+  let totalTransport = 0;
   let totalHours = 0;
   for (const r of rows) {
-    totalValue += Number(r.teacher_value) || 0;
+    const transport = Number(r.transport_value) || 0;
+    totalValue += (Number(r.teacher_value) || 0) + transport;
+    totalTransport += transport;
     const start = new Date(r.start_time.replace(' ', 'T'));
     const end = new Date(r.end_time.replace(' ', 'T'));
     totalHours += (end - start) / 3600000;
   }
-  return { totalValue: round2(totalValue), totalHours: round2(totalHours), count: rows.length };
+  return { totalValue: round2(totalValue), totalTransport: round2(totalTransport), totalHours: round2(totalHours), count: rows.length };
 }
 
 function round2(n) {

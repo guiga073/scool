@@ -69,6 +69,7 @@ CREATE TABLE IF NOT EXISTS teachers (
   password_hash TEXT,
   hourly_rate_presencial REAL,
   hourly_rate_online REAL,
+  transport_value REAL DEFAULT 10,
   active INTEGER NOT NULL DEFAULT 1,
   created_at TEXT DEFAULT (datetime('now'))
 );
@@ -94,6 +95,7 @@ CREATE TABLE IF NOT EXISTS classes (
   end_time TEXT NOT NULL,
   student_value REAL NOT NULL DEFAULT 0,
   teacher_value REAL NOT NULL DEFAULT 0,
+  transport_value REAL NOT NULL DEFAULT 0,
   meeting_link TEXT,
   status TEXT NOT NULL DEFAULT 'scheduled',
   student_paid INTEGER NOT NULL DEFAULT 0,
@@ -170,6 +172,11 @@ ensureColumn('students', 'login_email', 'TEXT');
 ensureColumn('students', 'password_hash', 'TEXT');
 ensureColumn('teachers', 'hourly_rate_presencial', 'REAL');
 ensureColumn('teachers', 'hourly_rate_online', 'REAL');
+// DEFAULT 10 aqui não é só para professores novos: o SQLite também usa esse valor
+// para preencher a coluna em quem já estava cadastrado, então isso já deixa
+// R$10 configurado para todo mundo que já existia no banco.
+ensureColumn('teachers', 'transport_value', 'REAL DEFAULT 10');
+ensureColumn('classes', 'transport_value', 'REAL DEFAULT 0');
 
 // A tabela de sessões mudou de "sempre admin" (admin_id) para "admin ou professor"
 // (user_type + user_id). Sessões são só tokens de login temporários — se o formato

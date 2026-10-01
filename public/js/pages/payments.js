@@ -94,11 +94,13 @@ Pages.payments = async function (root) {
         <p class="text-sm muted mt-0">Ainda não viraram fatura — a quinzena atual só fecha no dia 16 ou no dia 1º do mês seguinte. Mostrado aqui só para acompanhamento.</p>
         ${inProgress.length === 0 ? `<div class="empty-state">Nenhuma aula lançada na quinzena atual ainda.</div>` : `
         <div class="table-wrap"><table>
-          <thead><tr><th>Professor</th><th>Período</th><th class="num">Horas até agora</th><th class="num">Valor até agora</th></tr></thead>
+          <thead><tr><th>Professor</th><th>Período</th><th class="num">Horas até agora</th><th class="num">Transporte</th><th class="num">Valor até agora</th></tr></thead>
           <tbody>${inProgress.map(r => `
             <tr><td><a href="#/professores/${r.teacher_id}">${escapeHtml(r.teacher_name)}</a></td>
               <td>${formatDate(r.period_start)} – ${formatDate(r.period_end)}</td>
-              <td class="num tabular">${r.totalHours}h</td><td class="num tabular">${formatCurrency(r.totalValue)}</td></tr>`).join('')}</tbody>
+              <td class="num tabular">${r.totalHours}h</td>
+              <td class="num tabular">${formatCurrency(r.totalTransport)}</td>
+              <td class="num tabular">${formatCurrency(r.totalValue)}</td></tr>`).join('')}</tbody>
         </table></div>`}
       </div>
     `;
