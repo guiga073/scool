@@ -58,6 +58,29 @@ window.addEventListener('DOMContentLoaded', async () => {
     window.location.href = '/login.html';
   });
 
+  document.getElementById('recalc-btn').addEventListener('click', async () => {
+    const ok = await confirmModal(
+      'Isso vai substituir o "valor pago ao professor" e o "transporte" em TODAS as aulas já agendadas, usando o valor/hora e o transporte cadastrados hoje em cada professor (conforme a modalidade de cada aula). ' +
+      'Aulas de professores sem valor/hora cadastrado para aquela modalidade não serão alteradas. Faturas já marcadas como pagas continuam protegidas e não mudam. Quer continuar?',
+      'Recalcular valores'
+    );
+    if (!ok) return;
+    try {
+      const result = await api.post('/api/admin/recalculate-historical-values');
+      let msg = `${result.updated} de ${result.totalClasses} aula(s) atualizada(s).`;
+      if (result.skipped > 0) msg += ` ${result.skipped} não puderam ser recalculadas (sem valor/hora cadastrado): ${result.skippedTeachers.join(', ')}.`;
+      openModal(`
+        <div class="modal-header"><h3>Recálculo concluído</h3><button class="modal-close" id="recalc-done-close">&times;</button></div>
+        <p>${escapeHtml(msg)}</p>
+        <div class="form-actions"><button type="button" class="btn btn-primary" id="recalc-done-ok">Entendi</button></div>
+      `);
+      document.getElementById('recalc-done-close').onclick = closeModal;
+      document.getElementById('recalc-done-ok').onclick = closeModal;
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  });
+
   try {
     const me = await api.get('/api/auth/me');
     if (!me.user) { window.location.href = '/login.html'; return; }

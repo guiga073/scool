@@ -226,4 +226,13 @@ if (adminCount === 0) {
   }
 }
 
-module.exports = { db };
+// Gera uma cópia consistente do banco de dados inteiro, pronta para download.
+// O "checkpoint" obriga o SQLite a gravar tudo que ainda estava só no arquivo
+// -wal (mudanças recentes, em modo WAL) dentro do arquivo principal antes de
+// copiá-lo — sem isso, uma cópia simples do arquivo poderia sair incompleta.
+function backupBuffer() {
+  db.exec('PRAGMA wal_checkpoint(TRUNCATE);');
+  return fs.readFileSync(DB_PATH);
+}
+
+module.exports = { db, backupBuffer };

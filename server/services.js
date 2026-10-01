@@ -237,6 +237,53 @@ function findLoginEmailConflict(db, email, exclude) {
   return null;
 }
 
+// ---------- Recálculo em massa (ferramenta de uso único) ----------
+
+// Aplica o valor/hora e o transporte ATUAIS de cada professor em TODAS as aulas já
+// agendadas (status='scheduled'), usando a modalidade de cada aula para escolher entre
+// valor/hora presencial e online. Pensada para ser usada uma única vez, depois de já
+// existirem aulas cadastradas antes do valor/hora e do transporte existirem no sistema.
+// Faturas já marcadas como pagas continuam protegidas — syncInvoiceForDate nunca mexe nelas.
+function recalculateHistoricalValues(db) {
+  const classes = db.prepare(
+    `SELECT id, teacher_id, modality, start_time, end_time FROM classes WHERE status = 'scheduled'`
+  ).all();
+
+  let updated = 0;
+  const skippedTeachers = new Set();
+  const touched = [];
+
+  const getTeacher = db.prepare('SELECT name, hourly_rate_presencial, hourly_rate_online, transport_value FROM teachers WHERE id = ?');
+  const updateClass = db.prepare('UPDATE classes SET teacher_value = ?, transport_value = ? WHERE id = ?');
+
+  for (const c of classes) {
+    const teacher = getTeacher.get(c.teacher_id);
+    if (!teacher) continue;
+
+    const rate = c.modality === 'online' ? teacher.hourly_rate_online : teacher.hourly_rate_presencial;
+    if (rate === null || rate === undefined) {
+      skippedTeachers.add(`${teacher.name} (${c.modality})`);
+      continue;
+    }
+
+    const start = new Date(c.start_time.replace(' ', 'T'));
+    const end = new Date(c.end_time.replace(' ', 'T'));
+    const hours = (end - start) / 3600000;
+    const newTeacherValue = round2(rate * hours);
+    const newTransportValue = c.modality === 'presencial' ? round2(teacher.transport_value || 0) : 0;
+
+    updateClass.run(newTeacherValue, newTransportValue, c.id);
+    updated++;
+    touched.push({ teacherId: c.teacher_id, date: start });
+  }
+
+  for (const { teacherId, date } of touched) {
+    syncInvoiceForDate(db, teacherId, date);
+  }
+
+  return { totalClasses: classes.length, updated, skipped: classes.length - updated, skippedTeachers: Array.from(skippedTeachers) };
+}
+
 module.exports = {
   getQuinzenaPeriods,
   quinzenaForDate,
@@ -253,4 +300,5 @@ module.exports = {
   addFeedback,
   deleteFeedback,
   findLoginEmailConflict,
+  recalculateHistoricalValues,
 };

@@ -113,10 +113,11 @@ Duas coisas para não deixar passar:
   ambiente `RAILWAY_RUN_UID=0` no serviço — isso resolve um problema conhecido de
   permissão entre o Volume (que monta como usuário root) e imagens que rodam com outro
   usuário.
-- **Ative os backups automáticos da Railway** como uma segunda camada de segurança: na
-  aba **Settings** do serviço → **Backups**, dá para ligar backup diário/semanal/mensal
-  do Volume com um clique — é a forma mais simples de conseguir restaurar os dados caso
-  algo dê errado (seja um erro seu, seja algo da plataforma).
+- **Sobre backup**: o volume por si só não é um backup — é só onde os dados vivem
+  normalmente. Depois de publicar, veja a seção **"Backup — como funciona e o que eu
+  recomendo"** mais abaixo neste documento: o backup automático da Railway existe, mas
+  só no plano Pro; incluí no próprio sistema uma forma de backup que funciona em
+  qualquer plano, sem custo extra.
 
 **e) Gere o endereço público**
 1. Na aba **Settings** do serviço, em **Networking**, clique em **Generate Domain**.
@@ -148,12 +149,52 @@ considerar o plano pago caso note lentidão.
 - **Guarde a URL** em um lugar de fácil acesso para você e sua equipe (favoritos do
   navegador, por exemplo).
 - **Faça login** com o e-mail/senha definidos nas variáveis de ambiente.
-- **Backups**: os dados moram no volume, e o mais simples é ligar os backups automáticos
-  da própria Railway (Settings do serviço → aba **Backups** → escolher diário/semanal/
-  mensal) — cobre justamente esse caso (arquivo SQLite dentro de um Volume) e permite
-  restaurar pelo próprio painel se algo der errado. Para uma cópia rápida e manual na
-  hora, dá também para abrir um terminal do serviço (Shell) e copiar o arquivo
-  `data/sistema.db`.
+
+### Backup — como funciona e o que eu recomendo
+
+Existem duas camadas possíveis de backup. Vale usar as duas, mas a segunda é a que
+realmente importa e funciona em qualquer plano.
+
+**1) Backup nativo da Railway (opcional, só no plano Pro)** — a Railway tem uma aba
+**Backups** no serviço, com agendamento diário/semanal/mensal e restauração pelo
+próprio painel. **Atenção**: essa função só existe no plano **Pro** (a partir de
+US$20/mês); no plano **Hobby** (US$5/mês, o que a maioria usa para começar) essa aba
+aparece mas não deixa criar nenhum backup. Se você estiver no Hobby e quiser essa
+camada a mais, precisaria migrar para o Pro — não é obrigatório, por causa do item
+abaixo.
+
+**2) Backup de dentro do próprio sistema (recomendado, funciona em qualquer plano,
+sem custo extra)** — adicionei um botão **"Baixar backup dos dados"** no rodapé do
+menu lateral, visível em qualquer tela depois de logado como administrador. Ele baixa
+uma cópia completa e íntegra do banco de dados (um arquivo `.db`) na hora, puxando os
+dados mais recentes mesmo que tenham acabado de ser salvos. Essa cópia fica **fora da
+Railway por completo** — no seu computador, o que por si só já é uma proteção
+melhor do que depender só do backup automático de um provedor: se algum dia houver um
+problema com a própria Railway (conta, cobrança, bug da plataforma), você ainda tem os
+dados em mãos, independente dela.
+
+**Minha recomendação prática**: uma vez por semana (ou depois de um dia de muito
+cadastro novo), clique em "Baixar backup dos dados" e salve o arquivo num lugar
+seguro — Google Drive, e-mail para você mesmo, um pendrive, tanto faz. Se um dia
+precisar restaurar, me avise: dá para eu adicionar também uma tela de restauração
+dentro do próprio sistema (não fiz isso agora de cara porque é uma operação que
+substitui todos os dados atuais pelos do arquivo escolhido, e preferi confirmar com
+você antes de colocar algo assim no ar). Enquanto isso, a restauração manual é
+possível por um terminal (Shell) no painel da Railway, substituindo o arquivo
+`data/sistema.db` pelo seu backup e reiniciando o serviço.
+
+### Recalcular valores das aulas já agendadas (ferramenta de uso único)
+
+No mesmo rodapé do menu, tem o botão **"Recalcular valores das aulas já agendadas"**.
+Ele existe para o caso de você ter aulas cadastradas de antes de preencher o valor/hora
+e o transporte dos professores: um clique (com uma confirmação explicando exatamente o
+que vai mudar) aplica o valor/hora e o transporte **atuais** de cada professor em
+**todas** as aulas já agendadas, usando a modalidade de cada uma para saber se usa o
+valor presencial ou online. Professor sem valor/hora cadastrado para aquela modalidade
+fica de fora (a aula não é alterada) — e o resultado te diz exatamente quantas aulas
+mudaram e quais professores ficaram de fora, para você completar o cadastro deles se
+quiser. Faturas quinzenais já marcadas como pagas nunca são alteradas por essa
+ferramenta, mesmo que o valor da aula por trás delas mude.
 
 ---
 
