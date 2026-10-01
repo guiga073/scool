@@ -2,6 +2,8 @@
 // Componente de calendário/agenda (dia, semana, mês, ano) — sem dependências externas.
 
 const CalendarMath = {
+  firstName(fullName) { return String(fullName || '').trim().split(/\s+/)[0] || ''; },
+
   startOfMonth(date) { return new Date(date.getFullYear(), date.getMonth(), 1); },
   endOfMonth(date) { return new Date(date.getFullYear(), date.getMonth() + 1, 0); },
 
@@ -116,7 +118,7 @@ const Calendar = {
         cell.className = 'month-cell' + (day.getMonth() !== refDate.getMonth() ? ' out' : '') + (CalendarMath.sameDay(day, today) ? ' today' : '');
         const shown = dayClasses.slice(0, 3);
         cell.innerHTML = `<span class="day-num">${day.getDate()}</span>` +
-          shown.map(c => `<span class="chip">${formatTime(c.start_time)} ${escapeHtml(c.student_name)}</span>`).join('') +
+          shown.map(c => `<span class="chip">${formatTime(c.start_time)} ${escapeHtml(CalendarMath.firstName(c.student_name))}</span>`).join('') +
           (dayClasses.length > 3 ? `<span class="more">+${dayClasses.length - 3} mais</span>` : '');
         cell.addEventListener('click', (e) => {
           if (dayClasses.length === 0) { if (onCreateAt) onCreateAt(day); return; }

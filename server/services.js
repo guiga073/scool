@@ -226,7 +226,8 @@ function deleteFeedback(db, teacherId, studentId, feedbackId) {
 // exclude: { type: 'teacher'|'student', id } — ignora a própria conta ao editar.
 function findLoginEmailConflict(db, email, exclude) {
   if (!email) return null;
-  const asAdmin = db.prepare('SELECT id FROM admins WHERE email = ?').get(email);
+  const adminExcludeId = (exclude && exclude.type === 'admin') ? exclude.id : 0;
+  const asAdmin = db.prepare('SELECT id FROM admins WHERE email = ? AND id != ?').get(email, adminExcludeId);
   if (asAdmin) return 'admin';
   const teacherExcludeId = (exclude && exclude.type === 'teacher') ? exclude.id : 0;
   const asTeacher = db.prepare('SELECT id FROM teachers WHERE login_email = ? AND id != ?').get(email, teacherExcludeId);

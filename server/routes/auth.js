@@ -5,6 +5,7 @@ const {
   parseCookies, setSessionCookie, clearSessionCookie, hashPassword,
 } = require('../auth');
 const { sendJson, httpError } = require('../router');
+const svc = require('../services');
 
 function requireAuth(req) {
   const cookies = parseCookies(req);
@@ -73,14 +74,34 @@ function register(router) {
     sendJson(res, 200, { user });
   });
 
-  router.post('/api/auth/change-password', async (req, res) => {
-    const admin = requireAuth(req);
-    const { currentPassword, newPassword } = req.body || {};
-    if (!newPassword || String(newPassword).length < 6) throw httpError(400, 'Nova senha deve ter ao menos 6 caracteres');
-    const row = db.prepare('SELECT * FROM admins WHERE id = ?').get(admin.id);
+  // Troca o e-mail de login e/ou a senha do administrador logado. Sempre exige a
+  // senha atual para confirmar (mesmo só trocando o e-mail), por segurança.
+  router.put('/api/auth/account', async (req, res) => {
+    const me = requireAuth(req);
+    const { currentPassword, newEmail, newPassword } = req.body || {};
+    if (!currentPassword) throw httpError(400, 'Informe sua senha atual para confirmar');
+    const row = db.prepare('SELECT * FROM admins WHERE id = ?').get(me.id);
     if (!verifyPassword(currentPassword, row.password_hash)) throw httpError(401, 'Senha atual incorreta');
-    db.prepare('UPDATE admins SET password_hash = ? WHERE id = ?').run(hashPassword(newPassword), admin.id);
-    sendJson(res, 200, { ok: true });
+
+    let email = row.email;
+    if (newEmail && newEmail.trim()) {
+      const normalized = newEmail.trim().toLowerCase();
+      if (!normalized.includes('@')) throw httpError(400, 'E-mail inválido');
+      if (normalized !== row.email) {
+        const conflict = svc.findLoginEmailConflict(db, normalized, { type: 'admin', id: me.id });
+        if (conflict) throw httpError(400, 'Este e-mail já está em uso');
+      }
+      email = normalized;
+    }
+
+    let passwordHash = row.password_hash;
+    if (newPassword) {
+      if (String(newPassword).length < 6) throw httpError(400, 'Nova senha deve ter ao menos 6 caracteres');
+      passwordHash = hashPassword(newPassword);
+    }
+
+    db.prepare('UPDATE admins SET email = ?, password_hash = ? WHERE id = ?').run(email, passwordHash, me.id);
+    sendJson(res, 200, { id: me.id, email, name: row.name });
   });
 }
 

@@ -283,7 +283,12 @@ o resto do sistema.
 - **Perdi os dados depois de publicar uma atualização** — o volume/disco persistente
   não foi configurado (passo "d" acima), ou o `DATA_DIR` não bate com o caminho onde
   ele foi montado.
-- **Esqueci a senha do administrador** — abra um terminal (Shell) no painel do serviço
+- **Quero trocar meu e-mail ou senha de administrador (e sei a senha atual)** — não
+  precisa mexer no banco de dados: clique em **"Minha conta (e-mail / senha)"**, no
+  rodapé do menu lateral. Pede a senha atual para confirmar, e deixa trocar o e-mail,
+  a senha, ou os dois juntos.
+- **Esqueci a senha do administrador** (não sei a senha atual, então a tela acima não
+  ajuda) — abra um terminal (Shell) no painel do serviço
   de hospedagem e rode `node -e "console.log(require('./server/auth').hashPassword('nova-senha'))"`,
   depois atualize manualmente a coluna `password_hash` da tabela `admins` com esse
   valor (dá para abrir o `sistema.db` com qualquer cliente SQLite). É um processo
