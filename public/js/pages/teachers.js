@@ -23,7 +23,7 @@ function showCredentialsModal(title, warning, rows) {
     <div class="modal-header"><h3>${escapeHtml(title)}</h3><button class="modal-close" id="cred-close">&times;</button></div>
     <div class="alert alert-danger">${escapeHtml(warning)}</div>
     <div class="table-wrap"><table>
-      <thead><tr><th>Nome</th><th>E-mail de login</th><th>Senha</th></tr></thead>
+      <thead><tr><th>Nome</th><th>Login</th><th>Senha</th></tr></thead>
       <tbody>${rows.map(r => `<tr><td>${escapeHtml(r.name)}</td><td>${escapeHtml(r.login_email)}</td><td class="tabular" style="font-weight:700;">${escapeHtml(r.password)}</td></tr>`).join('')}</tbody>
     </table></div>
     <div class="form-actions">
@@ -35,8 +35,8 @@ function showCredentialsModal(title, warning, rows) {
   backdrop.querySelector('#cred-done').onclick = closeModal;
   backdrop.querySelector('#cred-download').addEventListener('click', () => {
     downloadCSV(
-      `senhas-professores-${new Date().toISOString().slice(0, 10)}.csv`,
-      ['Nome', 'E-mail de login', 'Senha'],
+      `logins-senhas-${new Date().toISOString().slice(0, 10)}.csv`,
+      ['Nome', 'Login', 'Senha'],
       rows.map(r => [r.name, r.login_email, r.password])
     );
   });
@@ -95,8 +95,8 @@ async function teacherFormModal(existing, onSaved) {
         <label>Acesso do professor ao sistema</label>
         <div class="hint" style="margin-top:-2px; margin-bottom:8px;">Opcional. Se preenchido, o professor poderá entrar com este e-mail e senha para ver a própria disponibilidade e os próprios ganhos.${t.has_login ? ' <strong>Este professor já tem acesso configurado.</strong>' : ''}</div>
         <div class="field-row">
-          <div class="field mb-0"><label for="tf-login-email">E-mail de acesso</label>
-            <input type="email" id="tf-login-email" value="${escapeHtml(t.login_email || '')}" placeholder="professor@exemplo.com"></div>
+          <div class="field mb-0"><label for="tf-login-email">Login de acesso (usuário ou e-mail)</label>
+            <input type="text" id="tf-login-email" value="${escapeHtml(t.login_email || '')}" placeholder="Ex.: joaosilva ou professor@exemplo.com"></div>
           <div class="field mb-0"><label for="tf-login-password">${t.has_login ? 'Nova senha (deixe em branco p/ manter)' : 'Senha de acesso'}</label>
             <input type="password" id="tf-login-password" autocomplete="new-password"></div>
         </div>

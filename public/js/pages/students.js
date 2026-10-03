@@ -2,6 +2,25 @@
 
 window.Pages = window.Pages || {};
 
+async function bulkGenerateStudentLogins() {
+  const ok = await confirmModal(
+    'Isso vai gerar um usuário (nome + sobrenome) e uma senha nova (5 caracteres, letras e números) para TODOS os alunos cadastrados, substituindo o login atual de quem já tiver um. ' +
+    'Você vai precisar passar o novo usuário e senha para cada aluno (ou responsável) — a planilha gerada serve exatamente para isso. Essa ação não pode ser desfeita. Quer continuar?',
+    'Gerar usuários e senhas'
+  );
+  if (!ok) return;
+  const results = await api.post('/api/students/bulk-generate-logins');
+  if (results.length === 0) {
+    showToast('Nenhum aluno cadastrado encontrado.', 'error');
+    return;
+  }
+  showCredentialsModal(
+    'Usuários e senhas gerados',
+    'Essa é a única vez que essas senhas aparecem em texto — depois de fechar esta janela, não tem como vê-las de novo (só gerar outras). Baixe a planilha ou copie agora.',
+    results
+  );
+}
+
 function studentFormModal(existing, onSaved) {
   const s = existing || {};
   const html = `
@@ -35,8 +54,8 @@ function studentFormModal(existing, onSaved) {
         <label>Acesso do aluno ao sistema</label>
         <div class="hint" style="margin-top:-2px; margin-bottom:8px;">Opcional. Se preenchido, o aluno poderá entrar com este e-mail e senha para ver as próprias aulas e o feedback dos professores.${s.has_login ? ' <strong>Este aluno já tem acesso configurado.</strong>' : ''}</div>
         <div class="field-row">
-          <div class="field mb-0"><label for="sf-login-email">E-mail de acesso</label>
-            <input type="email" id="sf-login-email" value="${escapeHtml(s.login_email || '')}" placeholder="aluno@exemplo.com"></div>
+          <div class="field mb-0"><label for="sf-login-email">Login de acesso (usuário ou e-mail)</label>
+            <input type="text" id="sf-login-email" value="${escapeHtml(s.login_email || '')}" placeholder="Ex.: joaosilva ou aluno@exemplo.com"></div>
           <div class="field mb-0"><label for="sf-login-password">${s.has_login ? 'Nova senha (deixe em branco p/ manter)' : 'Senha de acesso'}</label>
             <input type="password" id="sf-login-password" autocomplete="new-password"></div>
         </div>
@@ -86,13 +105,17 @@ Pages.studentsList = async function (root, opts) {
     <div class="page-header">
       <div><div class="eyebrow">Cadastro</div><h1>Alunos</h1>
         <p class="subtitle">Cadastre alunos e acompanhe dados, aulas e notas de cada um.</p></div>
-      <button class="btn btn-accent" id="add-student-btn">+ Cadastrar aluno</button>
+      <div class="flex gap-10">
+        <button class="btn btn-outline" id="bulk-gen-btn">Gerar usuários e senhas para todos</button>
+        <button class="btn btn-accent" id="add-student-btn">+ Cadastrar aluno</button>
+      </div>
     </div>
     <div class="card">
       <input type="text" class="search-input" id="student-search" placeholder="Buscar aluno por nome…" value="${escapeHtml(search)}">
       <div id="student-list-wrap" style="margin-top:16px;"><div class="loading-dots">Carregando…</div></div>
     </div>
   `;
+  document.getElementById('bulk-gen-btn').addEventListener('click', bulkGenerateStudentLogins);
 
   document.getElementById('add-student-btn').addEventListener('click', () => {
     studentFormModal(null, (created) => { location.hash = `#/alunos/${created.id}`; });

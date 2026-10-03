@@ -1,5 +1,4 @@
 // server/routes/teachers.js
-const crypto = require('node:crypto');
 const { db } = require('../db');
 const { sendJson, httpError } = require('../router');
 const { requireAuth } = require('./auth');
@@ -54,16 +53,6 @@ function parseTransportValue(value) {
   const n = Number(value);
   if (!Number.isFinite(n) || n < 0) throw httpError(400, 'Valor de transporte inválido');
   return n;
-}
-
-// Gera uma senha aleatória fácil de digitar/ditar: sem caracteres parecidos entre si
-// (0/O, 1/l/I ficam de fora de propósito), só letras e números, sem caracteres especiais.
-function generatePassword(length = 5) {
-  const chars = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789';
-  const bytes = crypto.randomBytes(length);
-  let out = '';
-  for (let i = 0; i < length; i++) out += chars[bytes[i] % chars.length];
-  return out;
 }
 
 function register(router) {
@@ -185,7 +174,7 @@ function register(router) {
     ).all();
     const update = db.prepare('UPDATE teachers SET password_hash = ? WHERE id = ?');
     const results = teachers.map((t) => {
-      const password = generatePassword();
+      const password = svc.generatePassword();
       update.run(hashPassword(password), t.id);
       return { name: t.name, login_email: t.login_email, password };
     });

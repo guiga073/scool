@@ -287,6 +287,46 @@ function findLoginEmailConflict(db, email, exclude) {
   return null;
 }
 
+// ---------- Geração de credenciais (usado pelas ferramentas de geração em massa) ----------
+
+const crypto = require('node:crypto');
+
+// Senha fácil de digitar/ditar: só letras e números, sem caracteres parecidos entre si
+// (0/O, 1/l/I ficam de fora de propósito).
+function generatePassword(length = 5) {
+  const chars = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789';
+  const bytes = crypto.randomBytes(length);
+  let out = '';
+  for (let i = 0; i < length; i++) out += chars[bytes[i] % chars.length];
+  return out;
+}
+
+// Primeiro nome + último sobrenome, sem acento e só minúsculo — fácil de lembrar.
+function slugifyNamePart(s) {
+  return String(s || '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // tira acentos
+    .toLowerCase().replace(/[^a-z]/g, ''); // só letras
+}
+
+// existingUsernames: um Set com os usuários já em uso (de qualquer tipo de conta) —
+// a função adiciona o resultado nesse mesmo Set, para que o próximo nome gerado no
+// mesmo lote já veja esse como ocupado também (evita duas pessoas com o mesmo nome
+// colidirem entre si dentro do mesmo processamento em massa).
+function generateUsername(fullName, existingUsernames) {
+  const parts = String(fullName || '').trim().split(/\s+/).filter(Boolean);
+  const first = slugifyNamePart(parts[0]);
+  const last = parts.length > 1 ? slugifyNamePart(parts[parts.length - 1]) : '';
+  const base = (first + last) || 'usuario';
+  let candidate = base;
+  let n = 2;
+  while (existingUsernames.has(candidate)) {
+    candidate = `${base}${n}`;
+    n++;
+  }
+  existingUsernames.add(candidate);
+  return candidate;
+}
+
 // ---------- Recálculo em massa (ferramenta de uso único) ----------
 
 // Aplica o valor/hora e o transporte ATUAIS de cada professor em TODAS as aulas já
@@ -438,4 +478,6 @@ module.exports = {
   clampDayOfMonth,
   ensureRecurringExpensesGenerated,
   syncRecurringExpenseCurrentMonth,
+  generatePassword,
+  generateUsername,
 };

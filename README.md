@@ -221,6 +221,16 @@ possível por um terminal (Shell) no painel da Railway, substituindo o arquivo
   disciplina, professor, e o link quando a aula é online) e "Feedbacks" (tudo que os
   professores já escreveram sobre ele, de forma só de leitura — quem escreve é sempre
   o professor). Na ficha do aluno: dados, calendário de aulas, notas e observações.
+
+  **Gerar login para todos os alunos de uma vez**: na lista de Alunos, o botão
+  **"Gerar usuários e senhas para todos"** cria, para cada aluno cadastrado, um usuário
+  (primeiro nome + sobrenome, sem espaço/acento — ex.: "joaosilva"; se já existir
+  alguém com esse mesmo usuário, seja aluno, professor ou admin, entra um número no
+  final automaticamente) e uma senha de 5 caracteres, e baixa uma planilha CSV com
+  tudo. Mesma regra de segurança do botão equivalente de Professores: a senha só
+  aparece em texto nesse momento — depois disso, não tem como ver de novo. O campo de
+  login (tanto de aluno quanto de professor) aceita usuário simples ou e-mail de
+  verdade, e a tela de login também — não precisa ser um e-mail.
 - **Professores** — cadastro com disciplinas e PIX, com busca por nome na lista. Tem
   também dois campos de **valor por hora** (presencial e online) e um de **transporte**,
   todos visíveis **só para você** — o professor não vê esses valores, nem pela própria

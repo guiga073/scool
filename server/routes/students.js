@@ -112,6 +112,30 @@ function register(router) {
     sendJson(res, 200, { ok: true });
   });
 
+  // Gera um usuário (primeiro nome + sobrenome) e uma senha nova (5 caracteres) para
+  // TODOS os alunos ativos, de uma vez — login/senha em texto puro só existem nesta
+  // resposta, o único jeito possível de "exportar" isso.
+  router.post('/api/students/bulk-generate-logins', async (req, res) => {
+    requireAuth(req);
+    const students = db.prepare('SELECT id, name FROM students WHERE active = 1 ORDER BY name').all();
+
+    // Junta todo usuário/e-mail já em uso em QUALQUER tipo de conta, pra nunca gerar
+    // um nome de usuário que já pertence a outra pessoa.
+    const taken = new Set();
+    db.prepare('SELECT email FROM admins').all().forEach((r) => taken.add(r.email));
+    db.prepare("SELECT login_email FROM teachers WHERE login_email IS NOT NULL").all().forEach((r) => taken.add(r.login_email));
+    db.prepare("SELECT login_email FROM students WHERE login_email IS NOT NULL").all().forEach((r) => taken.add(r.login_email));
+
+    const update = db.prepare('UPDATE students SET login_email = ?, password_hash = ? WHERE id = ?');
+    const results = students.map((s) => {
+      const username = svc.generateUsername(s.name, taken);
+      const password = svc.generatePassword();
+      update.run(username, hashPassword(password), s.id);
+      return { name: s.name, login_email: username, password };
+    });
+    sendJson(res, 200, results);
+  });
+
   // ---- Notas (grade history) ----
   router.post('/api/students/:id/grades', async (req, res) => {
     requireAuth(req);
