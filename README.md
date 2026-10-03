@@ -245,7 +245,19 @@ possível por um terminal (Shell) no painel da Railway, substituindo o arquivo
   feedback daquele aluno num bloco de texto simples (Data / Feedback, um embaixo do
   outro) pronto para copiar e mandar para o responsável, por exemplo. Você, pela ficha
   do professor (aba "Alunos e feedback"), vê e também pode lançar esse mesmo feedback
-  em nome dele. A disponibilidade é uma grade de Segunda a Domingo, das 8h às 20h — o
+  em nome dele.
+
+  **Sobre ver/exportar a senha de um professor**: o sistema guarda a senha como um
+  hash (criptografia de mão única) — ninguém, nem eu, consegue "abrir" uma senha já
+  definida e ver o texto original; só é possível redefinir uma nova. Por isso, toda vez
+  que você define ou troca a senha de um professor no cadastro dele, aparece uma janela
+  mostrando essa senha em texto, com opção de copiar ou baixar — é a única vez que ela
+  vai aparecer; depois de fechar essa janela, não tem mais como vê-la (só redefinir
+  outra). (Já existiu também um botão para redefinir a senha de todos os professores de
+  uma vez e baixar uma planilha — foi removido a pedido, para não arriscar ser usado
+  sem querer; se precisar de novo, é só pedir.)
+
+  A disponibilidade é uma grade de Segunda a Domingo, das 8h às 20h — o
   professor (ou você, pelo cadastro dele) marca os horários livres clicando nos
   quadradinhos. Isso é só uma anotação; como pedido, não bloqueia nem avisa nada no
   agendamento. Na ficha do professor (lado da secretaria): dados, alunos e feedback,

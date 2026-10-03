@@ -2,6 +2,48 @@
 
 window.Pages = window.Pages || {};
 
+// Baixa uma planilha CSV (abre normalmente no Excel, Google Sheets, Numbers etc.).
+// O \uFEFF no início garante que acentos apareçam certos quando aberto no Excel.
+function downloadCSV(filename, header, rows) {
+  const esc = (v) => `"${String(v).replace(/"/g, '""')}"`;
+  const csv = '\uFEFF' + [header, ...rows].map(row => row.map(esc).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+}
+
+// Mostra as credenciais (nome, e-mail, senha) de uma ou mais contas recém-definidas —
+// é a única janela de tempo em que a senha existe em texto puro, então deixa bem claro
+// isso e oferece copiar/baixar na hora.
+function showCredentialsModal(title, warning, rows) {
+  const backdrop = openModal(`
+    <div class="modal-header"><h3>${escapeHtml(title)}</h3><button class="modal-close" id="cred-close">&times;</button></div>
+    <div class="alert alert-danger">${escapeHtml(warning)}</div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Nome</th><th>E-mail de login</th><th>Senha</th></tr></thead>
+      <tbody>${rows.map(r => `<tr><td>${escapeHtml(r.name)}</td><td>${escapeHtml(r.login_email)}</td><td class="tabular" style="font-weight:700;">${escapeHtml(r.password)}</td></tr>`).join('')}</tbody>
+    </table></div>
+    <div class="form-actions">
+      <button type="button" class="btn btn-outline" id="cred-done">Fechar</button>
+      <button type="button" class="btn btn-primary" id="cred-download">Baixar planilha (CSV)</button>
+    </div>
+  `, { wide: true });
+  backdrop.querySelector('#cred-close').onclick = closeModal;
+  backdrop.querySelector('#cred-done').onclick = closeModal;
+  backdrop.querySelector('#cred-download').addEventListener('click', () => {
+    downloadCSV(
+      `senhas-professores-${new Date().toISOString().slice(0, 10)}.csv`,
+      ['Nome', 'E-mail de login', 'Senha'],
+      rows.map(r => [r.name, r.login_email, r.password])
+    );
+  });
+}
+
+
+
 async function teacherFormModal(existing, onSaved) {
   const t = existing || {};
   const allSubjects = await api.get('/api/subjects');
@@ -119,6 +161,13 @@ async function teacherFormModal(existing, onSaved) {
       const saved = existing ? await api.put(`/api/teachers/${existing.id}`, payload) : await api.post('/api/teachers', payload);
       closeModal();
       showToast(existing ? 'Professor atualizado.' : 'Professor cadastrado.');
+      if (payload.login_password && payload.login_email) {
+        showCredentialsModal(
+          'Login definido',
+          'Essa é a única vez que essa senha aparece em texto — depois de fechar esta janela, não tem como vê-la de novo (só redefinir outra). Copie ou anote agora.',
+          [{ name: payload.name, login_email: payload.login_email, password: payload.login_password }]
+        );
+      }
       onSaved(saved);
     } catch (err) {
       errEl.textContent = err.message;
