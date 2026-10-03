@@ -23,7 +23,7 @@ function register(router) {
 
   router.post('/api/payments/class/:id/mark-paid', async (req, res) => {
     requireAuth(req);
-    db.prepare("UPDATE classes SET student_paid = 1, student_paid_at = datetime('now') WHERE id = ?").run(req.params.id);
+    db.prepare("UPDATE classes SET student_paid = 1, student_paid_at = datetime('now', 'localtime') WHERE id = ?").run(req.params.id);
     sendJson(res, 200, { ok: true });
   });
 
@@ -59,7 +59,7 @@ function register(router) {
 
   router.post('/api/payments/monthly-charge/:id/mark-paid', async (req, res) => {
     requireAuth(req);
-    db.prepare("UPDATE monthly_charges SET status = 'paid', paid_at = datetime('now') WHERE id = ?").run(req.params.id);
+    db.prepare("UPDATE monthly_charges SET status = 'paid', paid_at = datetime('now', 'localtime') WHERE id = ?").run(req.params.id);
     sendJson(res, 200, { ok: true });
   });
 
@@ -102,7 +102,7 @@ function register(router) {
 
   router.post('/api/payments/invoice/:id/mark-paid', async (req, res) => {
     requireAuth(req);
-    db.prepare("UPDATE teacher_invoices SET status = 'paid', paid_at = datetime('now') WHERE id = ?").run(req.params.id);
+    db.prepare("UPDATE teacher_invoices SET status = 'paid', paid_at = datetime('now', 'localtime') WHERE id = ?").run(req.params.id);
     sendJson(res, 200, { ok: true });
   });
 
@@ -148,7 +148,7 @@ function register(router) {
 
   router.post('/api/expenses/:id/mark-paid', async (req, res) => {
     requireAuth(req);
-    db.prepare("UPDATE expenses SET status = 'paid', paid_at = datetime('now') WHERE id = ?").run(req.params.id);
+    db.prepare("UPDATE expenses SET status = 'paid', paid_at = datetime('now', 'localtime') WHERE id = ?").run(req.params.id);
     sendJson(res, 200, { ok: true });
   });
 
@@ -259,7 +259,7 @@ function register(router) {
       SELECT classes.id, 'aula' AS type, students.name AS name, classes.student_value AS value,
              classes.student_paid_at AS paid_at, classes.start_time AS reference_date
       FROM classes JOIN students ON students.id = classes.student_id
-      WHERE classes.student_paid = 1
+      WHERE classes.student_paid = 1 AND classes.status = 'scheduled'
     `).all();
 
     const receivedMonthly = db.prepare(`

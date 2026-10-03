@@ -426,31 +426,89 @@ Pages.payments = async function (root) {
       });
     }
 
+    let generalCategory = 'alunos';
+
     async function renderGeneral() {
-      generalEl.innerHTML = `<div class="card"><div class="loading-dots">Carregando…</div></div>`;
-      const rows = await api.get('/api/payments/history');
       generalEl.innerHTML = `
         <div class="card">
-          <div class="card-header"><h2>Histórico geral de pagamentos e recebimentos</h2></div>
-          ${rows.length === 0 ? `<div class="empty-state">Nada no histórico ainda.</div>` : `
+          <div class="card-header"><h2>Histórico geral</h2>
+            <div class="pill-toggle" id="hist-cat-toggle">
+              <button type="button" data-cat="alunos" class="${generalCategory === 'alunos' ? 'active' : ''}">Recebido de alunos</button>
+              <button type="button" data-cat="professores" class="${generalCategory === 'professores' ? 'active' : ''}">Pago a professores</button>
+              <button type="button" data-cat="despesas" class="${generalCategory === 'despesas' ? 'active' : ''}">Pago em despesas</button>
+            </div>
+          </div>
+          <div id="hist-cat-body"><div class="loading-dots">Carregando…</div></div>
+        </div>
+      `;
+      document.querySelectorAll('#hist-cat-toggle button').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('#hist-cat-toggle button').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          generalCategory = btn.dataset.cat;
+          renderCategoryBody();
+        });
+      });
+      renderCategoryBody();
+    }
+
+    async function renderCategoryBody() {
+      const catBody = document.getElementById('hist-cat-body');
+      catBody.innerHTML = '<div class="loading-dots">Carregando…</div>';
+      const rows = await api.get('/api/payments/history');
+      const typesByCategory = {
+        alunos: ['aula', 'mensalidade'],
+        professores: ['fatura_professor'],
+        despesas: ['despesa'],
+      };
+      const filtered = rows.filter(r => typesByCategory[generalCategory].includes(r.type));
+
+      if (filtered.length === 0) {
+        catBody.innerHTML = `<div class="empty-state">Nada por aqui ainda.</div>`;
+        return;
+      }
+
+      // Agrupa por mês (a partir de paid_at), do mais recente pro mais antigo.
+      const groups = new Map();
+      for (const r of filtered) {
+        const key = String(r.paid_at || '').slice(0, 7) || 'sem-data';
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(r);
+      }
+      const sortedKeys = Array.from(groups.keys()).sort((a, b) => b.localeCompare(a));
+
+      // Cada categoria só tem um tipo de registro, então a coluna de "referência" pode
+      // ter um nome específico e autoexplicativo, em vez de um genérico "Referência".
+      const referenceLabel = { alunos: 'Data da aula', professores: 'Início da quinzena', despesas: 'Vencimento' }[generalCategory];
+      const nameLabel = { alunos: 'Aluno', professores: 'Professor', despesas: 'Descrição' }[generalCategory];
+
+      catBody.innerHTML = sortedKeys.map(key => {
+        const items = groups.get(key);
+        const subtotal = items.reduce((s, r) => s + Number(r.value), 0);
+        const [y, m] = key.split('-');
+        const label = (y && m) ? `${MONTH_NAMES[Number(m) - 1]} de ${y}` : 'Sem data de pagamento';
+        return `
+          <div class="day-section-title" style="display:flex; justify-content:space-between; align-items:center;">
+            <span>${label}</span><span class="tabular">${formatCurrency(subtotal)}</span>
+          </div>
           <div class="table-wrap"><table>
-            <thead><tr><th>Tipo</th><th>Nome</th><th>Referência</th><th class="num">Valor</th><th>Data</th><th></th></tr></thead>
-            <tbody>${rows.map(r => `
+            <thead><tr><th>${nameLabel}</th><th>${referenceLabel}</th><th class="num">Valor</th><th>Pago/recebido em</th><th></th></tr></thead>
+            <tbody>${items.map(r => `
               <tr>
-                <td><span class="badge badge-neutral">${typeLabel(r.type)}</span></td>
                 <td>${escapeHtml(r.name)}</td>
                 <td>${escapeHtml(String(r.reference_date || '').slice(0, 10))}</td>
                 <td class="num tabular">${formatCurrency(r.value)}</td>
                 <td>${r.paid_at ? formatDateTime(r.paid_at) : '—'}</td>
                 <td><button class="btn-text text-sm" data-del-hist="${r.id}" data-type="${r.type}">Excluir</button></td>
               </tr>`).join('')}</tbody>
-          </table></div>`}
-        </div>
-      `;
-      generalEl.querySelectorAll('[data-del-hist]').forEach(btn => {
+          </table></div>
+        `;
+      }).join('');
+
+      catBody.querySelectorAll('[data-del-hist]').forEach(btn => {
         btn.addEventListener('click', async () => {
           const deleted = await deleteHistoryItem(btn.dataset.type, btn.dataset.delHist);
-          if (deleted) renderGeneral();
+          if (deleted) renderCategoryBody();
         });
       });
     }

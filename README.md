@@ -150,6 +150,28 @@ considerar o plano pago caso note lentidão.
   navegador, por exemplo).
 - **Faça login** com o e-mail/senha definidos nas variáveis de ambiente.
 
+### Fuso horário
+
+O sistema roda sempre em **America/Sao_Paulo** (o mesmo fuso do Rio de Janeiro — no
+Brasil, essas duas cidades e a maior parte do país compartilham o mesmo horário). Isso
+é fixado diretamente no código, não depende de nenhuma configuração do servidor de
+hospedagem, então não tem como um provedor sobrepor isso sem querer. Vale para tudo que
+o sistema registra como "agora" — hora de marcar um pagamento como feito, hora de
+cancelar uma aula, etc. — mas **não muda o horário de aulas que você mesmo cadastrou**:
+esses horários continuam exatamente como você digitou, já que são apenas texto
+guardado, sem nenhuma conversão de fuso por trás.
+
+### O que significa cada data no Histórico
+
+Cada categoria do Histórico mostra duas datas, com nomes diferentes dependendo da
+categoria:
+- Uma coluna com a **data "de referência"** daquele registro (nomeada "Data da aula",
+  "Início da quinzena" ou "Vencimento", dependendo da categoria) — é sobre o que a
+  cobrança trata, não quando ela foi paga.
+- A coluna **"Pago/recebido em"** — é quando você de fato marcou aquilo como pago ou
+  recebido no sistema, com hora exata. É essa data que decide em qual mês o valor entra
+  no painel Financeiro.
+
 ### Backup — como funciona e o que eu recomendo
 
 Existem duas camadas possíveis de backup. Vale usar as duas, mas a segunda é a que
@@ -234,15 +256,18 @@ possível por um terminal (Shell) no painel da Railway, substituindo o arquivo
   já indicando qual professor escreveu) e "Por professor" (busca um professor e vê o
   feedback que ele deu para todos os alunos dele). Tem o mesmo botão "Ver como texto" e
   a opção de excluir um item, se precisar.
-- **Financeiro** — visão geral do negócio: receita, custos e lucro do mês atual (até
-  agora), um gráfico comparando os últimos 6 ou 12 meses, e dois rankings do mês —
-  faturamento por disciplina e custo por professor (aulas + transporte), para ver o que
-  está puxando o resultado. A receita conta as aulas avulsas pelo valor que o aluno
-  paga, mais as mensalidades dos alunos de pagamento mensal; o custo conta o que é
-  pago aos professores (incluindo transporte) mais as despesas gerais lançadas em
-  Pagamentos → Despesas. Tudo calculado pela data da aula/despesa, não pela data em que
-  foi marcada como paga — então reflete o que foi de fato prestado/gasto naquele mês,
-  mesmo que o pagamento em si ainda esteja pendente.
+- **Financeiro** — visão geral do negócio: receita, custos e lucro do mês atual, um
+  gráfico comparando os últimos 6 ou 12 meses, e dois rankings do mês — faturamento por
+  disciplina e custo por professor, para ver o que está puxando o resultado. **Tudo
+  aqui é por regime de caixa**: cada valor conta no mês em que o dinheiro de fato
+  **entrou ou saiu** (a data em que foi marcado como pago/recebido), não no mês da aula
+  ou do vencimento da despesa. Isso é proposital — é o que garante que receita e custo
+  usem a mesma régua e o lucro sempre bata com o que realmente aconteceu, e evita o
+  problema de uma despesa com vencimento no fim do mês ficar "escondida" mesmo já tendo
+  sido paga antes disso. O que ainda está pendente (aulas não pagas, faturas de
+  professor em aberto, despesas a vencer) não entra no Financeiro — isso já é coberto
+  pela aba Pagamentos, que é sobre o que falta receber/pagar, não sobre o que já
+  aconteceu de fato.
 - **Agendamento** — ao marcar uma aula você escolhe aluno → modalidade → disciplina →
   professor (a lista de professores já vem filtrada pela disciplina escolhida) → data e
   horário → valores → link da aula. Quando a modalidade é **presencial**, o formulário e
@@ -267,8 +292,10 @@ possível por um terminal (Shell) no painel da Railway, substituindo o arquivo
   - Em **Histórico**, dá para buscar por **nome do aluno ou do responsável** e ver,
     mês a mês (com setas pra navegar entre meses), quais aulas daquele aluno já foram
     pagas e quais ainda estão pendentes — incluindo a mensalidade, se for aluno de
-    pagamento mensal. Sem busca, a tela mostra o histórico geral de tudo que já foi
-    pago/recebido, como antes. Cada item do histórico geral tem um botão **"Excluir"**,
+    pagamento mensal. Sem busca, a tela mostra o histórico geral organizado em três
+    categorias (três botões no topo: "Recebido de alunos", "Pago a professores", "Pago
+    em despesas"), cada uma agrupada mês a mês com o subtotal de cada mês, do mais
+    recente para o mais antigo. Cada item do histórico geral tem um botão **"Excluir"**,
     que remove de vez (não é só "desmarcar como pago" — some do registro e de todos os
     cálculos). Excluir uma aula paga cancela ela por completo, como na agenda. Único
     cuidado: excluir a **fatura de um professor** (não a aula em si) só impede que o

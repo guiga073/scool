@@ -1,5 +1,10 @@
 // server/index.js
-process.env.TZ = process.env.TZ || 'America/Sao_Paulo';
+// Força o fuso horário sempre — não só quando TZ não estiver definida. Alguns
+// provedores de hospedagem já sobem o contêiner com TZ=UTC configurada por padrão;
+// se usássemos "||" aqui, esse valor já existente venceria e o sistema rodaria em UTC
+// mesmo sem ninguém ter pedido isso. Horário do Rio de Janeiro e de São Paulo são o
+// mesmo fuso (America/Sao_Paulo é o identificador correto pros dois).
+process.env.TZ = 'America/Sao_Paulo';
 
 // Carregador simples de .env (sem dependências externas), só para desenvolvimento local.
 try {

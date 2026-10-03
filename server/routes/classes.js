@@ -129,7 +129,7 @@ function register(router) {
 
     db.prepare(`
       UPDATE classes SET student_id=?, teacher_id=?, subject_id=?, modality=?, start_time=?, end_time=?,
-        student_value=?, teacher_value=?, transport_value=?, meeting_link=?, updated_at=datetime('now')
+        student_value=?, teacher_value=?, transport_value=?, meeting_link=?, updated_at=datetime('now', 'localtime')
       WHERE id=?
     `).run(
       b.student_id, b.teacher_id, b.subject_id, b.modality, b.start_time, b.end_time,
@@ -150,7 +150,7 @@ function register(router) {
     requireAuth(req);
     const existing = db.prepare('SELECT * FROM classes WHERE id = ?').get(req.params.id);
     if (!existing) throw httpError(404, 'Aula não encontrada');
-    db.prepare("UPDATE classes SET status = 'cancelled', cancelled_at = datetime('now') WHERE id = ?").run(req.params.id);
+    db.prepare("UPDATE classes SET status = 'cancelled', cancelled_at = datetime('now', 'localtime') WHERE id = ?").run(req.params.id);
     svc.syncInvoiceForDate(db, existing.teacher_id, new Date(existing.start_time.replace(' ', 'T')));
     sendJson(res, 200, { ok: true });
   });

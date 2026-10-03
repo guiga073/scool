@@ -337,39 +337,37 @@ function recalculateHistoricalValues(db) {
 // ---------- Relatório financeiro ----------
 
 // Receita, custos e lucro de um único mês (ref = qualquer Date dentro do mês desejado).
-// "Até agora" quando o mês ainda está em andamento — não conta aulas futuras dentro do
-// mesmo mês que ainda não aconteceram.
+//
+// Tudo aqui é por REGIME DE CAIXA: cada valor é contado no mês em que o dinheiro de
+// fato entrou ou saiu (paid_at), não no mês da aula/vencimento. Isso é proposital e
+// importante — é o que garante que receita e custo usem a MESMA régua, então o lucro
+// sempre "bate" com o que realmente aconteceu financeiramente, e evita o problema de
+// uma despesa com vencimento futuro (ex.: dia 30) ficar invisível mesmo já paga antes
+// disso (ex.: dia 1). O que ainda não foi marcado como pago/recebido não entra aqui —
+// esse lado "a receber/a pagar" já é coberto pela aba Pagamentos.
 function monthFinancials(db, ref) {
   const pad = (n) => String(n).padStart(2, '0');
   const year = ref.getFullYear();
   const month = ref.getMonth(); // 0-indexed
-  const lastDay = new Date(year, month + 1, 0).getDate();
-  const monthStart = `${year}-${pad(month + 1)}-01 00:00:00`;
-  const naturalEnd = `${year}-${pad(month + 1)}-${pad(lastDay)} 23:59:59`;
-  const now = new Date();
-  const nowStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
-  const effectiveEnd = nowStr < naturalEnd ? nowStr : naturalEnd;
+  const monthPrefix = `${year}-${pad(month + 1)}-`;
+  const like = `${monthPrefix}%`;
 
   const classRevenue = db.prepare(`
-    SELECT COALESCE(SUM(classes.student_value), 0) AS total
-    FROM classes JOIN students ON students.id = classes.student_id
-    WHERE classes.status = 'scheduled' AND students.monthly_payment = 0
-      AND classes.start_time >= ? AND classes.start_time <= ?
-  `).get(monthStart, effectiveEnd).total;
+    SELECT COALESCE(SUM(student_value), 0) AS total FROM classes
+    WHERE status = 'scheduled' AND student_paid = 1 AND student_paid_at LIKE ?
+  `).get(like).total;
 
   const monthlyRevenue = db.prepare(
-    `SELECT COALESCE(SUM(value), 0) AS total FROM monthly_charges WHERE year = ? AND month = ?`
-  ).get(year, month + 1).total;
+    `SELECT COALESCE(SUM(value), 0) AS total FROM monthly_charges WHERE status = 'paid' AND paid_at LIKE ?`
+  ).get(like).total;
 
-  const teacherCosts = db.prepare(`
-    SELECT COALESCE(SUM(teacher_value + transport_value), 0) AS total
-    FROM classes WHERE status = 'scheduled' AND start_time >= ? AND start_time <= ?
-  `).get(monthStart, effectiveEnd).total;
+  const teacherCosts = db.prepare(
+    `SELECT COALESCE(SUM(total_value), 0) AS total FROM teacher_invoices WHERE status = 'paid' AND paid_at LIKE ?`
+  ).get(like).total;
 
-  const expenseCosts = db.prepare(`
-    SELECT COALESCE(SUM(value), 0) AS total FROM expenses
-    WHERE COALESCE(due_date, date(created_at)) >= ? AND COALESCE(due_date, date(created_at)) <= ?
-  `).get(monthStart.slice(0, 10), effectiveEnd.slice(0, 10)).total;
+  const expenseCosts = db.prepare(
+    `SELECT COALESCE(SUM(value), 0) AS total FROM expenses WHERE status = 'paid' AND paid_at LIKE ?`
+  ).get(like).total;
 
   const revenue = round2(classRevenue + monthlyRevenue);
   const totalCosts = round2(teacherCosts + expenseCosts);
@@ -380,7 +378,7 @@ function monthFinancials(db, ref) {
   };
 }
 
-// Série dos últimos N meses (incluindo o atual, parcial).
+// Série dos últimos N meses (incluindo o atual).
 function monthlyFinancialSeries(db, monthsBack) {
   const now = new Date();
   const out = [];
@@ -390,33 +388,29 @@ function monthlyFinancialSeries(db, monthsBack) {
   return out;
 }
 
-// Para um mês específico: faturamento por disciplina e custo por professor —
-// as listas de "o que está puxando o resultado" daquele mês.
+// Para um mês específico: faturamento por disciplina e custo por professor — mesmo
+// regime de caixa da função acima, pelas mesmas datas de pagamento/recebimento.
 function monthBreakdown(db, ref) {
   const pad = (n) => String(n).padStart(2, '0');
   const year = ref.getFullYear();
   const month = ref.getMonth();
-  const lastDay = new Date(year, month + 1, 0).getDate();
-  const monthStart = `${year}-${pad(month + 1)}-01 00:00:00`;
-  const monthEnd = `${year}-${pad(month + 1)}-${pad(lastDay)} 23:59:59`;
+  const like = `${year}-${pad(month + 1)}-%`;
 
   const bySubject = db.prepare(`
     SELECT subjects.name AS label, COALESCE(SUM(classes.student_value), 0) AS value
     FROM classes
     JOIN subjects ON subjects.id = classes.subject_id
-    JOIN students ON students.id = classes.student_id
-    WHERE classes.status = 'scheduled' AND students.monthly_payment = 0
-      AND classes.start_time >= ? AND classes.start_time <= ?
+    WHERE classes.status = 'scheduled' AND classes.student_paid = 1 AND classes.student_paid_at LIKE ?
     GROUP BY subjects.id HAVING value > 0 ORDER BY value DESC LIMIT 8
-  `).all(monthStart, monthEnd).map(r => ({ label: r.label, value: round2(r.value) }));
+  `).all(like).map(r => ({ label: r.label, value: round2(r.value) }));
 
   const byTeacher = db.prepare(`
-    SELECT teachers.name AS label, COALESCE(SUM(classes.teacher_value + classes.transport_value), 0) AS value
-    FROM classes
-    JOIN teachers ON teachers.id = classes.teacher_id
-    WHERE classes.status = 'scheduled' AND classes.start_time >= ? AND classes.start_time <= ?
+    SELECT teachers.name AS label, COALESCE(SUM(teacher_invoices.total_value), 0) AS value
+    FROM teacher_invoices
+    JOIN teachers ON teachers.id = teacher_invoices.teacher_id
+    WHERE teacher_invoices.status = 'paid' AND teacher_invoices.paid_at LIKE ?
     GROUP BY teachers.id HAVING value > 0 ORDER BY value DESC LIMIT 8
-  `).all(monthStart, monthEnd).map(r => ({ label: r.label, value: round2(r.value) }));
+  `).all(like).map(r => ({ label: r.label, value: round2(r.value) }));
 
   return { bySubject, byTeacher };
 }

@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS admins (
   email TEXT UNIQUE NOT NULL,
   password_hash TEXT NOT NULL,
   name TEXT,
-  created_at TEXT DEFAULT (datetime('now'))
+  created_at TEXT DEFAULT (datetime('now', 'localtime'))
 );
 
 CREATE TABLE IF NOT EXISTS students (
@@ -37,7 +37,7 @@ CREATE TABLE IF NOT EXISTS students (
   monthly_payment INTEGER NOT NULL DEFAULT 0,
   monthly_value REAL,
   active INTEGER NOT NULL DEFAULT 1,
-  created_at TEXT DEFAULT (datetime('now'))
+  created_at TEXT DEFAULT (datetime('now', 'localtime'))
 );
 
 CREATE TABLE IF NOT EXISTS grades (
@@ -45,16 +45,16 @@ CREATE TABLE IF NOT EXISTS grades (
   student_id INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
   subject TEXT NOT NULL,
   value TEXT NOT NULL,
-  date TEXT NOT NULL DEFAULT (date('now')),
-  created_at TEXT DEFAULT (datetime('now'))
+  date TEXT NOT NULL DEFAULT (date('now', 'localtime')),
+  created_at TEXT DEFAULT (datetime('now', 'localtime'))
 );
 
 CREATE TABLE IF NOT EXISTS observations (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   student_id INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
   text TEXT NOT NULL,
-  date TEXT NOT NULL DEFAULT (date('now')),
-  created_at TEXT DEFAULT (datetime('now'))
+  date TEXT NOT NULL DEFAULT (date('now', 'localtime')),
+  created_at TEXT DEFAULT (datetime('now', 'localtime'))
 );
 
 CREATE TABLE IF NOT EXISTS teachers (
@@ -71,7 +71,7 @@ CREATE TABLE IF NOT EXISTS teachers (
   hourly_rate_online REAL,
   transport_value REAL DEFAULT 10,
   active INTEGER NOT NULL DEFAULT 1,
-  created_at TEXT DEFAULT (datetime('now'))
+  created_at TEXT DEFAULT (datetime('now', 'localtime'))
 );
 
 CREATE TABLE IF NOT EXISTS subjects (
@@ -102,8 +102,8 @@ CREATE TABLE IF NOT EXISTS classes (
   student_paid_at TEXT,
   recurrence_group_id TEXT,
   cancelled_at TEXT,
-  created_at TEXT DEFAULT (datetime('now')),
-  updated_at TEXT DEFAULT (datetime('now'))
+  created_at TEXT DEFAULT (datetime('now', 'localtime')),
+  updated_at TEXT DEFAULT (datetime('now', 'localtime'))
 );
 
 CREATE INDEX IF NOT EXISTS idx_classes_teacher ON classes(teacher_id, start_time);
@@ -119,7 +119,7 @@ CREATE TABLE IF NOT EXISTS teacher_invoices (
   total_hours REAL NOT NULL DEFAULT 0,
   status TEXT NOT NULL DEFAULT 'pending',
   paid_at TEXT,
-  generated_at TEXT DEFAULT (datetime('now')),
+  generated_at TEXT DEFAULT (datetime('now', 'localtime')),
   UNIQUE(teacher_id, period_start, period_end)
 );
 
@@ -131,7 +131,7 @@ CREATE TABLE IF NOT EXISTS monthly_charges (
   value REAL NOT NULL DEFAULT 0,
   status TEXT NOT NULL DEFAULT 'pending',
   paid_at TEXT,
-  created_at TEXT DEFAULT (datetime('now')),
+  created_at TEXT DEFAULT (datetime('now', 'localtime')),
   UNIQUE(student_id, month, year)
 );
 
@@ -141,7 +141,7 @@ CREATE TABLE IF NOT EXISTS class_feedback (
   teacher_id INTEGER NOT NULL REFERENCES teachers(id) ON DELETE CASCADE,
   date TEXT NOT NULL,
   feedback TEXT NOT NULL,
-  created_at TEXT DEFAULT (datetime('now'))
+  created_at TEXT DEFAULT (datetime('now', 'localtime'))
 );
 
 CREATE INDEX IF NOT EXISTS idx_feedback_teacher_student ON class_feedback(teacher_id, student_id);
@@ -152,7 +152,7 @@ CREATE TABLE IF NOT EXISTS recurring_expenses (
   value REAL NOT NULL DEFAULT 0,
   day_of_month INTEGER NOT NULL DEFAULT 1,
   active INTEGER NOT NULL DEFAULT 1,
-  created_at TEXT DEFAULT (datetime('now'))
+  created_at TEXT DEFAULT (datetime('now', 'localtime'))
 );
 
 CREATE TABLE IF NOT EXISTS expenses (
@@ -163,7 +163,7 @@ CREATE TABLE IF NOT EXISTS expenses (
   status TEXT NOT NULL DEFAULT 'pending',
   paid_at TEXT,
   recurring_expense_id INTEGER REFERENCES recurring_expenses(id),
-  created_at TEXT DEFAULT (datetime('now'))
+  created_at TEXT DEFAULT (datetime('now', 'localtime'))
 );
 `);
 
@@ -205,7 +205,7 @@ CREATE TABLE IF NOT EXISTS sessions (
   token TEXT PRIMARY KEY,
   user_type TEXT NOT NULL,
   user_id INTEGER NOT NULL,
-  created_at TEXT DEFAULT (datetime('now')),
+  created_at TEXT DEFAULT (datetime('now', 'localtime')),
   expires_at TEXT NOT NULL
 );
 `);

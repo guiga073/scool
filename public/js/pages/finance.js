@@ -6,7 +6,7 @@ Pages.finance = async function (root) {
   root.innerHTML = `
     <div class="page-header">
       <div><div class="eyebrow">Financeiro</div><h1>Faturamento e lucro</h1>
-        <p class="subtitle">Visão geral do negócio — receita, custos e lucro ao longo do tempo.</p></div>
+        <p class="subtitle">Visão geral do negócio — receita, custos e lucro ao longo do tempo. Cada valor conta no mês em que foi efetivamente pago ou recebido (não no mês da aula ou do vencimento) — então o que ainda está pendente aparece em Pagamentos, não aqui.</p></div>
     </div>
     <div class="stat-grid" id="finance-stats"><div class="loading-dots">Carregando…</div></div>
     <div class="card card-ruled">
