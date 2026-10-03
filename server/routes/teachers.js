@@ -1,4 +1,5 @@
 // server/routes/teachers.js
+const crypto = require('node:crypto');
 const { db } = require('../db');
 const { sendJson, httpError } = require('../router');
 const { requireAuth } = require('./auth');
@@ -53,6 +54,16 @@ function parseTransportValue(value) {
   const n = Number(value);
   if (!Number.isFinite(n) || n < 0) throw httpError(400, 'Valor de transporte inválido');
   return n;
+}
+
+// Gera uma senha aleatória fácil de digitar/ditar: sem caracteres parecidos entre si
+// (0/O, 1/l/I ficam de fora de propósito), só letras e números, sem caracteres especiais.
+function generatePassword(length = 5) {
+  const chars = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789';
+  const bytes = crypto.randomBytes(length);
+  let out = '';
+  for (let i = 0; i < length; i++) out += chars[bytes[i] % chars.length];
+  return out;
 }
 
 function register(router) {
@@ -162,6 +173,23 @@ function register(router) {
     if (!existing) throw httpError(404, 'Professor não encontrado');
     db.prepare('UPDATE teachers SET active = 0 WHERE id = ?').run(req.params.id);
     sendJson(res, 200, { ok: true });
+  });
+
+  // Gera uma senha nova (5 caracteres, letras e números) para cada professor com login
+  // ativo e já salva o hash de cada uma — a senha em texto puro só existe nesta
+  // resposta, que é o único jeito possível de "exportar senhas".
+  router.post('/api/teachers/bulk-reset-passwords', async (req, res) => {
+    requireAuth(req);
+    const teachers = db.prepare(
+      "SELECT id, name, login_email FROM teachers WHERE active = 1 AND login_email IS NOT NULL ORDER BY name"
+    ).all();
+    const update = db.prepare('UPDATE teachers SET password_hash = ? WHERE id = ?');
+    const results = teachers.map((t) => {
+      const password = generatePassword();
+      update.run(hashPassword(password), t.id);
+      return { name: t.name, login_email: t.login_email, password };
+    });
+    sendJson(res, 200, results);
   });
 
   // ---- Feedback dos alunos de um professor (visto/gerenciado pela secretaria) ----

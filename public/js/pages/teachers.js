@@ -42,7 +42,24 @@ function showCredentialsModal(title, warning, rows) {
   });
 }
 
-
+async function bulkResetPasswords() {
+  const ok = await confirmModal(
+    'Isso vai gerar uma senha NOVA (5 caracteres, letras e números) para TODOS os professores que já têm login ativo, substituindo a senha atual de cada um. ' +
+    'Você vai precisar avisar cada professor da nova senha dele — a planilha gerada serve exatamente para isso. Essa ação não pode ser desfeita. Quer continuar?',
+    'Gerar novas senhas'
+  );
+  if (!ok) return;
+  const results = await api.post('/api/teachers/bulk-reset-passwords');
+  if (results.length === 0) {
+    showToast('Nenhum professor com login ativo encontrado.', 'error');
+    return;
+  }
+  showCredentialsModal(
+    'Novas senhas geradas',
+    'Essa é a única vez que essas senhas aparecem em texto — depois de fechar esta janela, não tem como vê-las de novo (só redefinir outras). Baixe a planilha ou copie agora.',
+    results
+  );
+}
 
 async function teacherFormModal(existing, onSaved) {
   const t = existing || {};
@@ -182,7 +199,10 @@ Pages.teachersList = async function (root, opts) {
     <div class="page-header">
       <div><div class="eyebrow">Cadastro</div><h1>Professores</h1>
         <p class="subtitle">Cadastre professores, suas disciplinas e disponibilidade.</p></div>
-      <button class="btn btn-accent" id="add-teacher-btn">+ Cadastrar professor</button>
+      <div class="flex gap-10">
+        <button class="btn btn-outline" id="bulk-reset-btn">Gerar novas senhas e baixar planilha</button>
+        <button class="btn btn-accent" id="add-teacher-btn">+ Cadastrar professor</button>
+      </div>
     </div>
     <div class="card">
       <input type="text" class="search-input" id="teacher-search" placeholder="Buscar professor por nome…" value="${escapeHtml(search)}">
@@ -192,6 +212,7 @@ Pages.teachersList = async function (root, opts) {
   document.getElementById('add-teacher-btn').addEventListener('click', () => {
     teacherFormModal(null, (created) => { location.hash = `#/professores/${created.id}`; });
   });
+  document.getElementById('bulk-reset-btn').addEventListener('click', bulkResetPasswords);
 
   const searchInput = document.getElementById('teacher-search');
   let debounce;

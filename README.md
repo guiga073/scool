@@ -247,15 +247,18 @@ possível por um terminal (Shell) no painel da Railway, substituindo o arquivo
   do professor (aba "Alunos e feedback"), vê e também pode lançar esse mesmo feedback
   em nome dele.
 
-  **Sobre ver/exportar a senha de um professor**: o sistema guarda a senha como um
+  **Sobre ver/exportar as senhas dos professores**: o sistema guarda a senha como um
   hash (criptografia de mão única) — ninguém, nem eu, consegue "abrir" uma senha já
   definida e ver o texto original; só é possível redefinir uma nova. Por isso, toda vez
-  que você define ou troca a senha de um professor no cadastro dele, aparece uma janela
-  mostrando essa senha em texto, com opção de copiar ou baixar — é a única vez que ela
-  vai aparecer; depois de fechar essa janela, não tem mais como vê-la (só redefinir
-  outra). (Já existiu também um botão para redefinir a senha de todos os professores de
-  uma vez e baixar uma planilha — foi removido a pedido, para não arriscar ser usado
-  sem querer; se precisar de novo, é só pedir.)
+  que você define ou troca a senha de um professor (seja no cadastro individual, seja
+  em massa), aparece uma janela mostrando essa senha em texto — é a única vez que ela
+  vai aparecer, então copie ou baixe ali mesmo. Na lista de Professores, o botão
+  **"Gerar novas senhas e baixar planilha"** faz isso para todos os professores com
+  login ativo de uma vez, trocando a senha atual de cada um (senhas de 5 caracteres,
+  só letras e números) e baixando um CSV (nome, e-mail, senha nova) para você
+  compartilhar com cada um. Senha de 5 caracteres é mais fácil de digitar/ditar, mas
+  também mais fraca do que uma mais longa — se quiser aumentar o tamanho no futuro, é
+  só pedir.
 
   A disponibilidade é uma grade de Segunda a Domingo, das 8h às 20h — o
   professor (ou você, pelo cadastro dele) marca os horários livres clicando nos
