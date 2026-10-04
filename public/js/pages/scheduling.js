@@ -115,7 +115,8 @@ async function openClassFormModal(options, onSaved) {
       </div>
 
       <div class="field-row">
-        <div class="field"><label for="cf-student-value">Valor que o aluno paga (R$)</label><input type="number" step="0.01" min="0" id="cf-student-value" value="${existing ? existing.student_value : ''}" required></div>
+        <div class="field"><label for="cf-student-value">Valor que o aluno paga (R$)</label><input type="number" step="0.01" min="0" id="cf-student-value" value="${existing ? existing.student_value : ''}" required>
+          <div class="hint hidden" id="cf-monthly-hint">Aluno de pagamento mensal: este valor é somado às outras aulas do mês para formar a mensalidade dele (em Pagamentos → Pagamentos mensais).</div></div>
         <div class="field"><label for="cf-teacher-value">Valor pago ao professor (R$)</label><input type="number" step="0.01" min="0" id="cf-teacher-value" value="${existing ? existing.teacher_value : ''}" required>
           <div class="hint">Preenchido automaticamente a partir do valor/hora cadastrado do professor — pode editar livremente.</div></div>
       </div>
@@ -162,6 +163,15 @@ async function openClassFormModal(options, onSaved) {
     addressDisplay.textContent = student.address ? student.address : `${student.name} não tem endereço cadastrado — adicione em Alunos para que apareça aqui.`;
   }
   studentSelect.addEventListener('change', updateAddressDisplay);
+
+  // Para aluno de pagamento mensal, o valor da aula entra na soma da mensalidade — avisa disso.
+  const monthlyHint = backdrop.querySelector('#cf-monthly-hint');
+  function updateMonthlyHint() {
+    const student = students.find(s => String(s.id) === studentSelect.value);
+    monthlyHint.classList.toggle('hidden', !(student && student.monthly_payment));
+  }
+  studentSelect.addEventListener('change', updateMonthlyHint);
+  updateMonthlyHint();
   modalitySelect.addEventListener('change', () => { updateAddressDisplay(); updateTransportVisibility(); autoFillTeacherValue(); autoFillTransportValue(); });
   updateAddressDisplay();
 

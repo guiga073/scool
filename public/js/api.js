@@ -126,3 +126,8 @@ function confirmModal(message, confirmLabel) {
     backdrop.querySelector('#confirm-ok').onclick = () => { closeModal(); resolve(true); };
   });
 }
+
+// Texto do estado de uma quinzena (vem do servidor: 'open' | 'closed' | 'upcoming').
+function quinzenaStatusText(status) {
+  return { open: 'em andamento', closed: 'encerrada', upcoming: 'ainda não começou' }[status] || '';
+}

@@ -210,11 +210,11 @@ possível por um terminal (Shell) no painel da Railway, substituindo o arquivo
 ## 5. Um tour rápido pelas funcionalidades
 
 - **Alunos** — cadastro completo (nome, endereço, responsáveis, telefone). A caixa
-  "Pagamento mensal" faz o aluno aparecer em **Pagamentos → Pagamentos especiais** em
-  vez de na lista de cobrança por aula — as aulas dele continuam no calendário
-  normalmente. O valor da mensalidade **não** é definido no cadastro: toda mensalidade
-  nasce com R$ 0,00 e você define/edita o valor de cada mês diretamente em Pagamentos →
-  Pagamentos especiais (clique em "Definir valor"). Assim como o professor, cada aluno
+  "Pagamento mensal" faz o aluno aparecer em **Pagamentos → Pagamentos mensais** em
+  vez de na lista de cobrança aula a aula — as aulas dele continuam no calendário
+  normalmente. A mensalidade **não** é um valor digitado: é sempre o **total das aulas do
+  aluno naquele mês somadas** (o "valor que o aluno paga" de cada aula, definido no
+  agendamento). Assim como o professor, cada aluno
   também pode ter um **login próprio** (e-mail + senha, preenchidos por você no
   cadastro): com ele, o aluno entra pelo mesmo endereço do site e cai numa área só dele
   (`/aluno.html`), com duas abas — "Minhas aulas" (a própria agenda: dia, horário,
@@ -231,6 +231,11 @@ possível por um terminal (Shell) no painel da Railway, substituindo o arquivo
   aparece em texto nesse momento — depois disso, não tem como ver de novo. O campo de
   login (tanto de aluno quanto de professor) aceita usuário simples ou e-mail de
   verdade, e a tela de login também — não precisa ser um e-mail.
+
+  **Excluir aluno ou professor**: o histórico de aulas e pagamentos dele é preservado
+  (por isso ele some das listas em vez de ser apagado do banco), mas o **login é
+  liberado** — usuário/e-mail e senha deixam de existir, e você pode cadastrar outra
+  pessoa com o mesmo usuário ou e-mail sem problema.
 - **Professores** — cadastro com disciplinas e PIX, com busca por nome na lista. Tem
   também dois campos de **valor por hora** (presencial e online) e um de **transporte**,
   todos visíveis **só para você** — o professor não vê esses valores, nem pela própria
@@ -293,20 +298,61 @@ possível por um terminal (Shell) no painel da Railway, substituindo o arquivo
   professor em aberto, despesas a vencer) não entra no Financeiro — isso já é coberto
   pela aba Pagamentos, que é sobre o que falta receber/pagar, não sobre o que já
   aconteceu de fato.
+
+  **Previsão do mês**: logo abaixo dos números realizados, o card "Previsão de
+  [nome do mês]" projeta como o mês em andamento deve fechar **se tudo que está agendado
+  acontecer e for pago**. Ele é a única parte do Financeiro que não é por regime de
+  caixa, de propósito: soma o valor que o aluno paga em **todas as aulas agendadas no
+  mês** (as que já aconteceram e as que ainda vão acontecer) mais as mensalidades,
+  desconta o que é pago aos professores por essas mesmas aulas (incluindo transporte)
+  e as despesas do mês (as que vencem no mês, pagas ou não, mais as já pagas no mês),
+  e mostra receita, custos, lucro e margem previstos. Aulas canceladas e aulas de
+  outros meses ficam de fora. Para alunos de pagamento mensal, a previsão soma o valor
+  de cada aula do mês (que é a própria mensalidade); se alguma aula deles estiver com
+  valor R$ 0,00, aparece um aviso — a previsão fica menor do que será até você ajustar
+  o valor dessas aulas na agenda.
 - **Agendamento** — ao marcar uma aula você escolhe aluno → modalidade → disciplina →
   professor (a lista de professores já vem filtrada pela disciplina escolhida) → data e
   horário → valores → link da aula. Quando a modalidade é **presencial**, o formulário e
   a agenda mostram o **endereço cadastrado do aluno** em vez do link — é para lá que o
   professor precisa ir. Aulas **online** continuam mostrando só o link, sem endereço. Há
-  também uma opção de aula recorrente semanal ("acompanhamento"), que cria uma aula
-  individual por semana no período escolhido. Conflitos de horário **avisam** ("⚠️ Foram
+  também a opção de **aula recorrente semanal ("acompanhamento")**, para quem tem aula
+  toda semana e você não quer agendar uma por uma: em **Agendamento → "+ Agendar
+  aula"**, marque **"Aula de acompanhamento (repetir semanalmente)"**, escolha o dia
+  da semana, o horário, e o período (De / Até) — o sistema cria uma aula para cada
+  semana nesse período, já com os valores preenchidos. Cada aula da série fica
+  registrada separadamente, então dá para editar ou cancelar uma só sem afetar as
+  outras. Se o aluno vem em mais de um dia da semana, repita o processo uma vez para
+  cada dia. Conflitos de horário **avisam** ("⚠️ Foram
   identificados conflitos.") mas nunca bloqueiam o agendamento. Aulas canceladas somem
   de todos os cálculos e telas.
-- **Pagamentos** — abas para "A receber" (aulas avulsas pendentes), "A pagar"
-  (faturas quinzenais dos professores, geradas automaticamente ao fim de cada
-  quinzena), "Pagamentos especiais" (mensalistas), "Despesas" e "Histórico". Nada
-  pendente desaparece sozinho — só some da lista de pendentes quando você marca como
-  recebido/pago.
+- **Pagamentos** — cinco abas: "Pagamentos avulsos", "Pagamentos mensais", "A pagar
+  (professores)", "Despesas" e "Histórico". Nada pendente desaparece sozinho — só some
+  da lista de pendentes quando você marca como recebido/pago.
+  - **Pagamentos avulsos** — alunos que pagam **por aula**, cobrados aula a aula
+    (alunos de pagamento mensal nunca aparecem aqui). A lista é agrupada **por aluno e,
+    dentro de cada um, por mês**. O total "a receber agora" soma só as aulas que **já
+    aconteceram** e ainda não foram pagas; as aulas futuras já agendadas (por exemplo, de
+    uma série recorrente) aparecem separadas, marcadas "ainda não aconteceu", e só viram
+    cobrança quando acontecerem — mas dá para receber adiantado se o aluno pagar antes.
+    Cada aula tem seu botão "Marcar recebido", e cada mês de cada aluno tem **"Marcar o
+    mês como recebido"**, que recebe todas as aulas daquele aluno naquele mês de uma vez
+    (com confirmação, avisando se inclui aulas que ainda não aconteceram).
+  - **Pagamentos mensais** — alunos marcados como "pagamento mensal" no cadastro. Uma
+    cobrança por aluno por mês, mostrando o **total de todas as aulas dele naquele mês
+    somadas** (o mês inteiro conta, inclusive aulas que ainda vão acontecer; aulas
+    canceladas não entram), com a lista dos dias. Enquanto está pendente, o total
+    acompanha as aulas (se uma for adicionada, editada ou cancelada, ele muda sozinho).
+    Ao marcar como recebida, o valor recebido **fica fixo** — por isso, se ainda há aulas
+    por vir no mês, o sistema pede confirmação antes. Importante: o valor da mensalidade
+    vem do "valor que o aluno paga" de cada aula; se alguma aula de um aluno mensalista
+    estiver com R$ 0,00, aparece um aviso em vermelho.
+  - **A pagar** — as faturas quinzenais dos professores (geradas automaticamente ao fim
+    de cada quinzena). Em "Quinzenas em andamento", **Previsto** é o que a fatura terá
+    se nada mudar (todas as aulas agendadas na quinzena, as que já aconteceram e as que
+    ainda vão acontecer) e **Já dado** é só a parte que já aconteceu até agora. O mesmo
+    vale na ficha do professor e na área dele, que também dizem se cada quinzena está
+    "em andamento", "encerrada" ou "ainda não começou".
   - Em **Despesas**, além de lançar uma despesa avulsa, dá para cadastrar **despesas
     recorrentes** (assinaturas mensais, aluguel, etc.): você define descrição, valor e
     o dia do mês, e a partir daí uma despesa é gerada sozinha todo mês naquele dia —
@@ -320,7 +366,7 @@ possível por um terminal (Shell) no painel da Railway, substituindo o arquivo
     pagamento mensal. Sem busca, a tela mostra o histórico geral organizado em três
     categorias (três botões no topo: "Recebido de alunos", "Pago a professores", "Pago
     em despesas"), cada uma agrupada mês a mês com o subtotal de cada mês, do mais
-    recente para o mais antigo. Cada item do histórico geral tem um botão **"Excluir"**,
+    recente para o mais antigo. Cada item do histórico geral tem um botão **"Voltar para pendente"** (desfaz o "marcar como recebido/pago" — útil se marcou sem querer) e um **"Excluir"**,
     que remove de vez (não é só "desmarcar como pago" — some do registro e de todos os
     cálculos). Excluir uma aula paga cancela ela por completo, como na agenda. Único
     cuidado: excluir a **fatura de um professor** (não a aula em si) só impede que o

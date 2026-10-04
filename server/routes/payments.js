@@ -5,20 +5,24 @@ const { requireAuth } = require('./auth');
 const svc = require('../services');
 
 function register(router) {
-  // ---- A RECEBER (aulas avulsas de alunos que NÃO são de pagamento mensal) ----
+  // ---- PAGAMENTOS AVULSOS (aula a aula, só de alunos que NÃO são de pagamento mensal) ----
+  // `happened` = a aula já começou (decidido aqui, no fuso do servidor). Aula que já
+  // aconteceu e não foi paga é cobrança "devida agora"; aula futura ainda não venceu.
   router.get('/api/payments/receivable', async (req, res) => {
     requireAuth(req);
     svc.runPeriodicChecks(db);
+    const nowStr = svc.formatLocalDateTime(new Date());
     const rows = db.prepare(`
       SELECT classes.id, classes.start_time, classes.end_time, classes.student_value, classes.student_paid, classes.student_paid_at,
-             students.id AS student_id, students.name AS student_name, subjects.name AS subject_name
+             students.id AS student_id, students.name AS student_name, subjects.name AS subject_name,
+             CASE WHEN classes.start_time <= ? THEN 1 ELSE 0 END AS happened
       FROM classes
       JOIN students ON students.id = classes.student_id
       JOIN subjects ON subjects.id = classes.subject_id
       WHERE classes.status = 'scheduled' AND classes.student_paid = 0 AND students.monthly_payment = 0
       ORDER BY classes.start_time
-    `).all();
-    sendJson(res, 200, rows);
+    `).all(nowStr);
+    sendJson(res, 200, rows.map(r => ({ ...r, happened: !!r.happened })));
   });
 
   router.post('/api/payments/class/:id/mark-paid', async (req, res) => {
@@ -27,40 +31,49 @@ function register(router) {
     sendJson(res, 200, { ok: true });
   });
 
+  // Marca várias aulas de uma vez (um único UPDATE, então ou vai tudo ou nada). Só mexe em
+  // aulas ativas, ainda não pagas, de alunos de pagamento por aula.
+  router.post('/api/payments/class/mark-paid-bulk', async (req, res) => {
+    requireAuth(req);
+    const ids = Array.isArray(req.body && req.body.ids)
+      ? req.body.ids.map(Number).filter((n) => Number.isInteger(n) && n > 0)
+      : [];
+    if (ids.length === 0) throw httpError(400, 'Nenhuma aula informada');
+    if (ids.length > 500) throw httpError(400, 'Aulas demais de uma vez (máximo 500)');
+    const placeholders = ids.map(() => '?').join(',');
+    const info = db.prepare(`
+      UPDATE classes SET student_paid = 1, student_paid_at = datetime('now', 'localtime')
+      WHERE id IN (${placeholders}) AND status = 'scheduled' AND student_paid = 0
+        AND student_id IN (SELECT id FROM students WHERE monthly_payment = 0)
+    `).run(...ids);
+    sendJson(res, 200, { updated: Number(info.changes) });
+  });
+
   router.post('/api/payments/class/:id/mark-pending', async (req, res) => {
     requireAuth(req);
     db.prepare('UPDATE classes SET student_paid = 0, student_paid_at = NULL WHERE id = ?').run(req.params.id);
     sendJson(res, 200, { ok: true });
   });
 
-  // ---- PAGAMENTOS ESPECIAIS (alunos de mensalidade) ----
-  router.get('/api/payments/special', async (req, res) => {
+  // ---- PAGAMENTOS MENSAIS (alunos marcados como "pagamento mensal" no cadastro) ----
+  // Um item por aluno e por mês, com o TOTAL das aulas do mês somado na hora (não existe mais
+  // valor digitado à mão). Meses sem nenhuma aula não aparecem.
+  router.get('/api/payments/monthly', async (req, res) => {
     requireAuth(req);
     svc.runPeriodicChecks(db);
-    const rows = db.prepare(`
-      SELECT monthly_charges.*, students.name AS student_name
-      FROM monthly_charges
-      JOIN students ON students.id = monthly_charges.student_id
-      WHERE monthly_charges.status = 'pending'
-      ORDER BY monthly_charges.year DESC, monthly_charges.month DESC, students.name
-    `).all();
-    sendJson(res, 200, rows);
+    sendJson(res, 200, svc.pendingMonthlyBilling(db));
   });
 
-  router.put('/api/payments/monthly-charge/:id', async (req, res) => {
-    requireAuth(req);
-    const value = Number(req.body && req.body.value);
-    if (!Number.isFinite(value) || value < 0) throw httpError(400, 'Valor inválido');
-    const existing = db.prepare('SELECT * FROM monthly_charges WHERE id = ?').get(req.params.id);
-    if (!existing) throw httpError(404, 'Mensalidade não encontrada');
-    db.prepare('UPDATE monthly_charges SET value = ? WHERE id = ?').run(value, req.params.id);
-    sendJson(res, 200, db.prepare('SELECT * FROM monthly_charges WHERE id = ?').get(req.params.id));
-  });
-
+  // Ao marcar como recebida, guarda o total calculado naquele momento em `value` — é o
+  // "quanto foi recebido" que o Histórico e o Financeiro usam, e que não muda depois.
   router.post('/api/payments/monthly-charge/:id/mark-paid', async (req, res) => {
     requireAuth(req);
-    db.prepare("UPDATE monthly_charges SET status = 'paid', paid_at = datetime('now', 'localtime') WHERE id = ?").run(req.params.id);
-    sendJson(res, 200, { ok: true });
+    const charge = db.prepare('SELECT * FROM monthly_charges WHERE id = ?').get(req.params.id);
+    if (!charge) throw httpError(404, 'Mensalidade não encontrada');
+    const { total } = svc.monthTotalForStudent(db, charge.student_id, charge.year, charge.month);
+    db.prepare("UPDATE monthly_charges SET status = 'paid', paid_at = datetime('now', 'localtime'), value = ? WHERE id = ?")
+      .run(total, req.params.id);
+    sendJson(res, 200, { ok: true, value: total });
   });
 
   router.post('/api/payments/monthly-charge/:id/mark-pending', async (req, res) => {
@@ -237,18 +250,22 @@ function register(router) {
       ORDER BY classes.start_time
     `).all(req.params.id, start, end);
 
-    let monthlyCharge = null;
+    // Aluno de pagamento mensal: o que vale é a mensalidade do mês (soma das aulas), não o
+    // status de cada aula individualmente.
+    let monthly = null;
     if (student.monthly_payment) {
-      monthlyCharge = db.prepare(
-        'SELECT * FROM monthly_charges WHERE student_id = ? AND year = ? AND month = ?'
-      ).get(req.params.id, year, month) || null;
+      const t = svc.monthTotalForStudent(db, student.id, year, month);
+      const charge = db.prepare(
+        'SELECT id, status, value, paid_at FROM monthly_charges WHERE student_id = ? AND year = ? AND month = ?'
+      ).get(student.id, year, month) || null;
+      monthly = { total: t.total, classCount: t.classCount, zeroValueCount: t.zeroValueCount, charge };
     }
 
     sendJson(res, 200, {
       student: { id: student.id, name: student.name, guardian_name: student.guardian_name, monthly_payment: !!student.monthly_payment },
       year, month,
       classes: classes.map(c => ({ ...c, student_paid: !!c.student_paid })),
-      monthlyCharge,
+      monthly,
     });
   });
 

@@ -77,14 +77,14 @@ async function renderGanhos(el) {
   const { currentPeriods, invoices } = await api.get('/api/teacher-portal/earnings');
   const { first, second } = currentPeriods;
   el.innerHTML = `
-    <p class="text-sm muted">O valor da quinzena atual atualiza sozinho conforme novas aulas são agendadas para você. Quando a quinzena termina, ela vira uma fatura na lista abaixo.</p>
+    <p class="text-sm muted">O valor <strong>previsto</strong> de cada quinzena soma todas as aulas agendadas para você nela — as que já aconteceram e as que ainda vão acontecer — e atualiza sozinho conforme aulas são agendadas ou canceladas. Quando a quinzena termina, ela vira uma fatura na lista abaixo.</p>
     <div class="stat-grid">
-      <div class="stat-card"><div class="stat-label">1ª quinzena (dia 1 a 15) — em andamento</div>
+      <div class="stat-card"><div class="stat-label">1ª quinzena (dia 1 a 15) — ${quinzenaStatusText(first.status)}</div>
         <div class="stat-value accent tabular">${formatCurrency(first.totalValue)}</div>
-        <div class="text-sm muted">${first.totalHours}h dadas até agora</div></div>
-      <div class="stat-card"><div class="stat-label">2ª quinzena (dia 16 ao fim do mês) — em andamento</div>
+        <div class="text-sm muted">previsto (${first.totalHours}h) · já dadas: ${first.given.totalHours}h (${formatCurrency(first.given.totalValue)})</div></div>
+      <div class="stat-card"><div class="stat-label">2ª quinzena (dia 16 ao fim do mês) — ${quinzenaStatusText(second.status)}</div>
         <div class="stat-value accent tabular">${formatCurrency(second.totalValue)}</div>
-        <div class="text-sm muted">${second.totalHours}h dadas até agora</div></div>
+        <div class="text-sm muted">previsto (${second.totalHours}h) · já dadas: ${second.given.totalHours}h (${formatCurrency(second.given.totalValue)})</div></div>
     </div>
     <div class="card">
       <div class="card-header"><h2>Faturas quinzenais</h2></div>

@@ -7,16 +7,17 @@ Pages.dashboard = async function (root) {
   const todayStart = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())} 00:00:00`;
   const todayEnd = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())} 23:59:59`;
 
-  const [students, teachers, todayClasses, receivable, special, payable] = await Promise.all([
+  const [students, teachers, todayClasses, receivable, monthly, payable] = await Promise.all([
     api.get('/api/students'),
     api.get('/api/teachers'),
     api.get(`/api/classes?start=${encodeURIComponent(todayStart)}&end=${encodeURIComponent(todayEnd)}`),
     api.get('/api/payments/receivable'),
-    api.get('/api/payments/special'),
+    api.get('/api/payments/monthly'),
     api.get('/api/payments/payable'),
   ]);
 
-  const totalReceivable = receivable.reduce((s, c) => s + Number(c.student_value), 0) + special.reduce((s, c) => s + Number(c.value), 0);
+  // A receber agora = aulas avulsas que JÁ aconteceram e não foram pagas + mensalidades pendentes.
+  const totalReceivable = receivable.filter(c => c.happened).reduce((s, c) => s + Number(c.student_value), 0) + monthly.reduce((s, c) => s + Number(c.total), 0);
   const totalPayable = payable.invoices.reduce((s, i) => s + Number(i.total_value), 0);
 
   todayClasses.sort((a, b) => a.start_time.localeCompare(b.start_time));
@@ -33,7 +34,7 @@ Pages.dashboard = async function (root) {
     <div class="stat-grid">
       <div class="stat-card"><div class="stat-label">Alunos ativos</div><div class="stat-value">${students.length}</div></div>
       <div class="stat-card"><div class="stat-label">Professores ativos</div><div class="stat-value">${teachers.length}</div></div>
-      <div class="stat-card"><div class="stat-label">A receber (pendente)</div><div class="stat-value accent tabular">${formatCurrency(totalReceivable)}</div></div>
+      <div class="stat-card"><div class="stat-label">A receber (pendente)</div><div class="stat-value accent tabular">${formatCurrency(totalReceivable)}</div><div class="text-sm muted">aulas avulsas já realizadas + mensalidades</div></div>
       <div class="stat-card"><div class="stat-label">A pagar a professores</div><div class="stat-value danger tabular">${formatCurrency(totalPayable)}</div></div>
     </div>
 

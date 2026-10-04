@@ -53,7 +53,11 @@ function findConflicts(db, { teacherId, studentId, startTime, endTime, excludeCl
 
 // ---------- Faturas quinzenais dos professores ----------
 
-function calcPeriodTotals(db, teacherId, periodStart, periodEnd) {
+// Devolve o total da quinzena INTEIRA (todas as aulas agendadas nela — é o que a fatura vai
+// ter quando a quinzena fechar) e, em `given`, só a parte que já aconteceu até `now`
+// (aulas que já começaram). Em quinzenas já encerradas, `given` é igual ao total.
+function calcPeriodTotals(db, teacherId, periodStart, periodEnd, now) {
+  const nowStr = formatLocalDateTime(now || new Date());
   const rows = db.prepare(
     `SELECT teacher_value, transport_value, start_time, end_time FROM classes
      WHERE teacher_id = ? AND status = 'scheduled' AND start_time >= ? AND start_time <= ?`
@@ -62,19 +66,50 @@ function calcPeriodTotals(db, teacherId, periodStart, periodEnd) {
   let totalValue = 0;
   let totalTransport = 0;
   let totalHours = 0;
+  const given = { count: 0, totalValue: 0, totalTransport: 0, totalHours: 0 };
   for (const r of rows) {
     const transport = Number(r.transport_value) || 0;
-    totalValue += (Number(r.teacher_value) || 0) + transport;
-    totalTransport += transport;
+    const value = (Number(r.teacher_value) || 0) + transport;
     const start = new Date(r.start_time.replace(' ', 'T'));
     const end = new Date(r.end_time.replace(' ', 'T'));
-    totalHours += (end - start) / 3600000;
+    const hours = (end - start) / 3600000;
+    totalValue += value;
+    totalTransport += transport;
+    totalHours += hours;
+    if (r.start_time <= nowStr) {
+      given.count += 1;
+      given.totalValue += value;
+      given.totalTransport += transport;
+      given.totalHours += hours;
+    }
   }
-  return { totalValue: round2(totalValue), totalTransport: round2(totalTransport), totalHours: round2(totalHours), count: rows.length };
+  return {
+    totalValue: round2(totalValue), totalTransport: round2(totalTransport), totalHours: round2(totalHours), count: rows.length,
+    given: {
+      count: given.count, totalValue: round2(given.totalValue),
+      totalTransport: round2(given.totalTransport), totalHours: round2(given.totalHours),
+    },
+  };
 }
 
 function round2(n) {
   return Math.round((Number(n) + Number.EPSILON) * 100) / 100;
+}
+
+// Estado de uma quinzena em relação a "agora": 'open' (em andamento), 'closed' (já
+// encerrou e virou fatura) ou 'upcoming' (ainda não começou).
+function periodStatus(period, now) {
+  const nowStr = formatLocalDateTime(now || new Date());
+  if (nowStr > period.end) return 'closed';
+  if (nowStr < period.start) return 'upcoming';
+  return 'open';
+}
+
+// 'YYYY-MM-DD HH:MM:SS' no fuso do servidor (America/Sao_Paulo) — mesmo formato guardado
+// no banco, então dá para comparar direto com start_time.
+function formatLocalDateTime(d) {
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
 
 // Mantém em dia a fatura (pendente) de um professor para a quinzena que contém `date`.
@@ -147,11 +182,62 @@ function ensureMonthlyChargesGenerated(db) {
       'SELECT id FROM monthly_charges WHERE student_id = ? AND month = ? AND year = ?'
     ).get(s.id, month, year);
     if (existing) continue;
-    // Começa em 0 — o valor da mensalidade é definido manualmente em Pagamentos > Pagamentos especiais.
+    // Este registro só guarda o STATUS (pendente/pago) do mês. O valor mostrado enquanto
+    // está pendente é sempre calculado na hora, somando as aulas do aluno naquele mês
+    // (ver monthTotalForStudent); o campo `value` só é preenchido quando é marcado como
+    // recebido, para guardar exatamente quanto foi recebido.
     db.prepare(
       'INSERT INTO monthly_charges (student_id, month, year, value) VALUES (?, ?, ?, 0)'
     ).run(s.id, month, year);
   }
+}
+
+// Soma das aulas (não canceladas) de UM aluno num mês — é o valor da mensalidade dele.
+// Conta o mês inteiro, inclusive aulas que ainda vão acontecer.
+function monthTotalForStudent(db, studentId, year, month, now) {
+  const pad = (n) => String(n).padStart(2, '0');
+  const nowStr = formatLocalDateTime(now || new Date());
+  const r = db.prepare(`
+    SELECT COUNT(*) AS class_count,
+           COALESCE(SUM(student_value), 0) AS total,
+           COALESCE(SUM(CASE WHEN start_time <= ? THEN 1 ELSE 0 END), 0) AS done_count,
+           COALESCE(SUM(CASE WHEN student_value = 0 THEN 1 ELSE 0 END), 0) AS zero_value_count
+    FROM classes
+    WHERE student_id = ? AND status = 'scheduled' AND start_time LIKE ?
+  `).get(nowStr, studentId, `${year}-${pad(month)}-%`);
+  return {
+    classCount: r.class_count, doneCount: r.done_count,
+    total: round2(r.total), zeroValueCount: r.zero_value_count,
+  };
+}
+
+// Mensalidades PENDENTES dos alunos de pagamento mensal, cada uma com o total das aulas
+// do mês somado na hora. Meses sem nenhuma aula não aparecem (não há o que cobrar).
+function pendingMonthlyBilling(db, now) {
+  const pad = (n) => String(n).padStart(2, '0');
+  const charges = db.prepare(`
+    SELECT monthly_charges.id, monthly_charges.student_id, monthly_charges.year, monthly_charges.month,
+           students.name AS student_name
+    FROM monthly_charges
+    JOIN students ON students.id = monthly_charges.student_id
+    WHERE monthly_charges.status = 'pending' AND students.active = 1 AND students.monthly_payment = 1
+    ORDER BY monthly_charges.year DESC, monthly_charges.month DESC, students.name
+  `).all();
+  const datesStmt = db.prepare(
+    `SELECT start_time FROM classes WHERE student_id = ? AND status = 'scheduled' AND start_time LIKE ? ORDER BY start_time`
+  );
+  const out = [];
+  for (const c of charges) {
+    const t = monthTotalForStudent(db, c.student_id, c.year, c.month, now);
+    if (t.classCount === 0) continue;
+    const dates = datesStmt.all(c.student_id, `${c.year}-${pad(c.month)}-%`)
+      .map((r) => `${r.start_time.slice(8, 10)}/${r.start_time.slice(5, 7)}`);
+    out.push({
+      id: c.id, student_id: c.student_id, student_name: c.student_name, year: c.year, month: c.month,
+      classCount: t.classCount, doneCount: t.doneCount, total: t.total, zeroValueCount: t.zeroValueCount, dates,
+    });
+  }
+  return out;
 }
 
 // Roda todas as verificações periódicas de uma vez (usada no boot e no cron).
@@ -278,11 +364,14 @@ function findLoginEmailConflict(db, email, exclude) {
   const adminExcludeId = (exclude && exclude.type === 'admin') ? exclude.id : 0;
   const asAdmin = db.prepare('SELECT id FROM admins WHERE email = ? AND id != ?').get(email, adminExcludeId);
   if (asAdmin) return 'admin';
+  // Só contas ATIVAS seguram um login. Quem foi deletado (active = 0) é mantido no banco
+  // apenas para preservar o histórico de aulas/pagamentos — não pode mais entrar no
+  // sistema, então o usuário/e-mail dele precisa ficar livre para ser usado de novo.
   const teacherExcludeId = (exclude && exclude.type === 'teacher') ? exclude.id : 0;
-  const asTeacher = db.prepare('SELECT id FROM teachers WHERE login_email = ? AND id != ?').get(email, teacherExcludeId);
+  const asTeacher = db.prepare('SELECT id FROM teachers WHERE login_email = ? AND id != ? AND active = 1').get(email, teacherExcludeId);
   if (asTeacher) return 'teacher';
   const studentExcludeId = (exclude && exclude.type === 'student') ? exclude.id : 0;
-  const asStudent = db.prepare('SELECT id FROM students WHERE login_email = ? AND id != ?').get(email, studentExcludeId);
+  const asStudent = db.prepare('SELECT id FROM students WHERE login_email = ? AND id != ? AND active = 1').get(email, studentExcludeId);
   if (asStudent) return 'student';
   return null;
 }
@@ -428,8 +517,60 @@ function monthlyFinancialSeries(db, monthsBack) {
   return out;
 }
 
+// PREVISÃO do mês: diferente de monthFinancials (que só conta o que já foi pago/recebido),
+// aqui é uma projeção — conta TODAS as aulas agendadas no mês (as que já aconteceram e as
+// que ainda vão acontecer), pelos valores registrados em cada aula, mais mensalidades e
+// despesas do mês. Responde "quanto vou lucrar este mês se tudo que está agendado
+// acontecer e for pago".
+//   - Receita: valor que o aluno paga em cada aula agendada. Para alunos de pagamento por aula
+//     isso é cobrado aula a aula; para alunos de pagamento mensal é a SOMA das aulas do mês
+//     (a mensalidade) — nos dois casos o total é o mesmo cálculo: soma de student_value.
+//   - Custos de professor: valor da aula + transporte de cada aula agendada
+//   - Despesas: as que vencem no mês (pagas ou não) + as que já foram pagas no mês
+// `now` é parâmetro só para poder testar; normalmente é "agora".
+function monthForecast(db, ref, now) {
+  now = now || new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  const year = ref.getFullYear();
+  const month = ref.getMonth();
+  const like = `${year}-${pad(month + 1)}-%`;
+  const nowStr = formatLocalDateTime(now);
+
+  const cls = db.prepare(`
+    SELECT
+      COUNT(*) AS total,
+      COALESCE(SUM(CASE WHEN classes.start_time <= ? THEN 1 ELSE 0 END), 0) AS done,
+      COALESCE(SUM(CASE WHEN students.monthly_payment = 0 THEN classes.student_value ELSE 0 END), 0) AS class_revenue,
+      COALESCE(SUM(CASE WHEN students.monthly_payment = 1 THEN classes.student_value ELSE 0 END), 0) AS monthly_revenue,
+      COALESCE(SUM(CASE WHEN students.monthly_payment = 1 AND classes.student_value = 0 THEN 1 ELSE 0 END), 0) AS monthly_zero_classes,
+      COALESCE(SUM(classes.teacher_value + classes.transport_value), 0) AS teacher_costs
+    FROM classes JOIN students ON students.id = classes.student_id
+    WHERE classes.status = 'scheduled' AND classes.start_time LIKE ?
+  `).get(nowStr, like);
+
+  const expenseCosts = db.prepare(`
+    SELECT COALESCE(SUM(value), 0) AS total FROM expenses
+    WHERE COALESCE(due_date, substr(created_at, 1, 10)) LIKE ?
+       OR (status = 'paid' AND paid_at LIKE ?)
+  `).get(like, like).total;
+
+  const revenue = round2(cls.class_revenue + cls.monthly_revenue);
+  const teacherCosts = round2(cls.teacher_costs);
+  const totalCosts = round2(teacherCosts + expenseCosts);
+  const profit = round2(revenue - totalCosts);
+  return {
+    year, month: month + 1,
+    classCount: cls.total, doneCount: cls.done, upcomingCount: cls.total - cls.done,
+    revenue, classRevenue: round2(cls.class_revenue), monthlyRevenue: round2(cls.monthly_revenue),
+    // aulas de alunos mensalistas sem valor definido — deixam a mensalidade (e a previsão) menor do que deveria
+    monthlyZeroValueClasses: cls.monthly_zero_classes,
+    teacherCosts, expenseCosts: round2(expenseCosts), totalCosts,
+    profit, margin: revenue > 0 ? round2(profit / revenue * 100) : 0,
+  };
+}
+
 // Para um mês específico: faturamento por disciplina e custo por professor — mesmo
-// regime de caixa da função acima, pelas mesmas datas de pagamento/recebimento.
+// regime de caixa de monthFinancials, pelas mesmas datas de pagamento/recebimento.
 function monthBreakdown(db, ref) {
   const pad = (n) => String(n).padStart(2, '0');
   const year = ref.getFullYear();
@@ -475,6 +616,11 @@ module.exports = {
   monthFinancials,
   monthlyFinancialSeries,
   monthBreakdown,
+  monthForecast,
+  monthTotalForStudent,
+  pendingMonthlyBilling,
+  formatLocalDateTime,
+  periodStatus,
   clampDayOfMonth,
   ensureRecurringExpensesGenerated,
   syncRecurringExpenseCurrentMonth,

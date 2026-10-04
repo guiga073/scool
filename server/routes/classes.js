@@ -80,6 +80,9 @@ function register(router) {
       if (b[f] === undefined || b[f] === null || b[f] === '') throw httpError(400, `Campo obrigatório faltando: ${f}`);
     }
     if (b.start_date > b.end_date) throw httpError(400, 'Data final deve ser depois da data inicial');
+    // Mesmas checagens da aula avulsa — sem elas, um horário digitado errado criaria a série inteira quebrada.
+    if (b.start_time >= b.end_time) throw httpError(400, 'O horário de término deve ser depois do horário de início');
+    if (!['online', 'presencial'].includes(b.modality)) throw httpError(400, "Modalidade deve ser 'online' ou 'presencial'");
 
     const occurrences = svc.buildRecurringOccurrences({
       dayOfWeek: Number(b.day_of_week), startTime: b.start_time, endTime: b.end_time,

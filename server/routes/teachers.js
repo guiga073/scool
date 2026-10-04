@@ -115,8 +115,8 @@ function register(router) {
       classes,
       invoices,
       currentPeriods: {
-        first: { ...first, ...firstTotals },
-        second: { ...second, ...secondTotals },
+        first: { ...first, status: svc.periodStatus(first), ...firstTotals },
+        second: { ...second, status: svc.periodStatus(second), ...secondTotals },
       },
     });
   });
@@ -160,7 +160,8 @@ function register(router) {
     requireAuth(req);
     const existing = db.prepare('SELECT * FROM teachers WHERE id = ?').get(req.params.id);
     if (!existing) throw httpError(404, 'Professor não encontrado');
-    db.prepare('UPDATE teachers SET active = 0 WHERE id = ?').run(req.params.id);
+    // Inativa (preserva o histórico) e libera o login — usuário/e-mail e senha.
+    db.prepare('UPDATE teachers SET active = 0, login_email = NULL, password_hash = NULL WHERE id = ?').run(req.params.id);
     sendJson(res, 200, { ok: true });
   });
 

@@ -48,7 +48,7 @@ function studentFormModal(existing, onSaved) {
           <input type="checkbox" id="sf-monthly" ${s.monthly_payment ? 'checked' : ''}>
           <label for="sf-monthly">Pagamento mensal (em vez de pagar por aula)</label>
         </div>
-        <div class="hint">As aulas continuam sendo registradas e aparecendo no calendário normalmente. Elas só não entram na lista de "a receber por aula" — em vez disso, este aluno aparece em "Pagamentos especiais", onde você define o valor a receber a cada mês.</div>
+        <div class="hint">As aulas continuam sendo registradas e aparecendo no calendário normalmente. Em vez de cobrar aula a aula, este aluno aparece em "Pagamentos mensais", com uma cobrança por mês: o total de todas as aulas dele naquele mês somadas (o "valor que o aluno paga" de cada aula, definido no agendamento).</div>
       </div>
       <div class="field">
         <label>Acesso do aluno ao sistema</label>
@@ -165,7 +165,7 @@ Pages.studentDetail = async function (root, id) {
   root.innerHTML = `
     <div class="page-header">
       <div><div class="eyebrow">Aluno</div><h1>${escapeHtml(student.name)}</h1>
-        <p class="subtitle">${student.monthly_payment ? `Pagamento mensal <a href="#/pagamentos">(definir valor do mês em Pagamentos)</a>` : 'Pagamento por aula'}</p></div>
+        <p class="subtitle">${student.monthly_payment ? `Pagamento mensal <a href="#/pagamentos">(ver mensalidade em Pagamentos)</a>` : 'Pagamento por aula'}</p></div>
       <div class="flex gap-10">
         <a href="#/alunos" class="btn btn-outline">&larr; Voltar</a>
         <button class="btn btn-danger" id="delete-student-btn">Remover</button>

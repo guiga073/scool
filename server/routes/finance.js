@@ -11,6 +11,13 @@ function register(router) {
     sendJson(res, 200, svc.monthlyFinancialSeries(db, months));
   });
 
+  // Previsão do mês em andamento (projeção com tudo que está agendado — ver monthForecast).
+  router.get('/api/finance/forecast', async (req, res) => {
+    requireAuth(req);
+    svc.runPeriodicChecks(db); // garante mensalidades e despesas recorrentes do mês já geradas
+    sendJson(res, 200, svc.monthForecast(db, new Date()));
+  });
+
   router.get('/api/finance/breakdown', async (req, res) => {
     requireAuth(req);
     const year = Number(req.query.year) || new Date().getFullYear();

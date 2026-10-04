@@ -65,14 +65,20 @@ function register(router) {
     const secondTotals = svc.calcPeriodTotals(db, me.id, second.start, second.end);
     // O total já inclui o transporte corretamente — só o detalhamento (quanto é hora e
     // quanto é transporte) fica de fora, pelo mesmo motivo de o valor/hora não aparecer aqui.
-    const hideBreakdown = ({ totalTransport, ...rest }) => rest;
+    const hideBreakdown = ({ totalTransport, given, ...rest }) => ({
+      ...rest,
+      given: given ? { count: given.count, totalValue: given.totalValue, totalHours: given.totalHours } : undefined,
+    });
 
     const invoices = db.prepare(
       'SELECT * FROM teacher_invoices WHERE teacher_id = ? ORDER BY period_start DESC'
     ).all(me.id);
 
     sendJson(res, 200, {
-      currentPeriods: { first: { ...first, ...hideBreakdown(firstTotals) }, second: { ...second, ...hideBreakdown(secondTotals) } },
+      currentPeriods: {
+        first: { ...first, status: svc.periodStatus(first), ...hideBreakdown(firstTotals) },
+        second: { ...second, status: svc.periodStatus(second), ...hideBreakdown(secondTotals) },
+      },
       invoices,
     });
   });

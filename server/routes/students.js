@@ -107,8 +107,9 @@ function register(router) {
     requireAuth(req);
     const existing = db.prepare('SELECT * FROM students WHERE id = ?').get(req.params.id);
     if (!existing) throw httpError(404, 'Aluno não encontrado');
-    // Inativa em vez de apagar de vez, para preservar o histórico de aulas/pagamentos já registrados.
-    db.prepare('UPDATE students SET active = 0 WHERE id = ?').run(req.params.id);
+    // Inativa em vez de apagar de vez, para preservar o histórico de aulas/pagamentos já
+    // registrados — mas libera o login (usuário/e-mail e senha), que não serve mais pra nada.
+    db.prepare('UPDATE students SET active = 0, login_email = NULL, password_hash = NULL WHERE id = ?').run(req.params.id);
     sendJson(res, 200, { ok: true });
   });
 
@@ -123,8 +124,11 @@ function register(router) {
     // um nome de usuário que já pertence a outra pessoa.
     const taken = new Set();
     db.prepare('SELECT email FROM admins').all().forEach((r) => taken.add(r.email));
-    db.prepare("SELECT login_email FROM teachers WHERE login_email IS NOT NULL").all().forEach((r) => taken.add(r.login_email));
-    db.prepare("SELECT login_email FROM students WHERE login_email IS NOT NULL").all().forEach((r) => taken.add(r.login_email));
+    db.prepare("SELECT login_email FROM teachers WHERE login_email IS NOT NULL AND active = 1").all().forEach((r) => taken.add(r.login_email));
+    // Os próprios alunos que estão sendo processados agora vão receber um login novo, então o
+    // login ANTIGO deles não conta como "ocupado" — senão o mesmo aluno ganharia "joaosilva2"
+    // numa segunda geração, só porque o "joaosilva" anterior era dele mesmo.
+    // (Alunos ativos são todos reprocessados abaixo, então basta não incluí-los aqui.)
 
     const update = db.prepare('UPDATE students SET login_email = ?, password_hash = ? WHERE id = ?');
     const results = students.map((s) => {

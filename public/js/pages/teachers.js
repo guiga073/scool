@@ -368,12 +368,12 @@ Pages.teacherDetail = async function (root, id) {
     const { first, second } = teacher.currentPeriods;
     el.innerHTML = `
       <div class="stat-grid">
-        <div class="stat-card"><div class="stat-label">1ª quinzena (dia 1 a 15) — em andamento</div>
+        <div class="stat-card"><div class="stat-label">1ª quinzena (dia 1 a 15) — ${quinzenaStatusText(first.status)}</div>
           <div class="stat-value accent tabular">${formatCurrency(first.totalValue)}</div>
-          <div class="text-sm muted">${first.totalHours}h dadas · ${formatCurrency(first.totalTransport)} em transporte</div></div>
-        <div class="stat-card"><div class="stat-label">2ª quinzena (dia 16 ao fim do mês) — em andamento</div>
+          <div class="text-sm muted">previsto (${first.totalHours}h, inclui ${formatCurrency(first.totalTransport)} de transporte) · já dadas: ${first.given.totalHours}h (${formatCurrency(first.given.totalValue)})</div></div>
+        <div class="stat-card"><div class="stat-label">2ª quinzena (dia 16 ao fim do mês) — ${quinzenaStatusText(second.status)}</div>
           <div class="stat-value accent tabular">${formatCurrency(second.totalValue)}</div>
-          <div class="text-sm muted">${second.totalHours}h dadas · ${formatCurrency(second.totalTransport)} em transporte</div></div>
+          <div class="text-sm muted">previsto (${second.totalHours}h, inclui ${formatCurrency(second.totalTransport)} de transporte) · já dadas: ${second.given.totalHours}h (${formatCurrency(second.given.totalValue)})</div></div>
       </div>
       <div class="card">
         <div class="card-header"><h2>Faturas geradas</h2></div>

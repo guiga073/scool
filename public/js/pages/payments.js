@@ -6,6 +6,69 @@ function typeLabel(type) {
   return { aula: 'Aula', mensalidade: 'Mensalidade', fatura_professor: 'Fatura de professor', despesa: 'Despesa' }[type] || type;
 }
 
+function pluralPt(n, one, many) {
+  return `${n} ${Number(n) === 1 ? one : many}`;
+}
+
+// Agrupa as aulas avulsas pendentes por aluno e, dentro de cada aluno, por mês.
+// `happened` vem do servidor (a aula já começou). Cada aluno traz o que é devido agora
+// (aulas já realizadas sem pagamento) separado do que ainda vai acontecer.
+function groupReceivable(rows) {
+  const students = new Map();
+  for (const r of rows) {
+    if (!students.has(r.student_id)) {
+      students.set(r.student_id, {
+        student_id: r.student_id, student_name: r.student_name,
+        dueTotal: 0, dueCount: 0, upcomingTotal: 0, upcomingCount: 0, firstDue: null, months: new Map(),
+      });
+    }
+    const g = students.get(r.student_id);
+    const value = Number(r.student_value) || 0;
+    if (r.happened) {
+      g.dueTotal += value; g.dueCount++;
+      if (!g.firstDue || r.start_time < g.firstDue) g.firstDue = r.start_time;
+    } else {
+      g.upcomingTotal += value; g.upcomingCount++;
+    }
+    const key = String(r.start_time).slice(0, 7);
+    if (!g.months.has(key)) g.months.set(key, { key, rows: [], total: 0, dueCount: 0, upcomingCount: 0 });
+    const m = g.months.get(key);
+    m.rows.push(r); m.total += value;
+    if (r.happened) m.dueCount++; else m.upcomingCount++;
+  }
+  const groups = Array.from(students.values()).map((g) => ({
+    ...g,
+    months: Array.from(g.months.values())
+      .sort((a, b) => a.key.localeCompare(b.key))
+      .map((m) => ({ ...m, rows: m.rows.slice().sort((a, b) => a.start_time.localeCompare(b.start_time)) })),
+  }));
+  groups.sort((a, b) => {
+    if ((a.dueCount > 0) !== (b.dueCount > 0)) return a.dueCount > 0 ? -1 : 1;   // quem deve agora vem primeiro
+    if (a.dueCount > 0) return a.firstDue.localeCompare(b.firstDue);              // dívida mais antiga primeiro
+    return a.student_name.localeCompare(b.student_name, 'pt-BR');
+  });
+  const totals = groups.reduce((t, g) => ({
+    dueTotal: t.dueTotal + g.dueTotal, dueCount: t.dueCount + g.dueCount,
+    upcomingTotal: t.upcomingTotal + g.upcomingTotal, upcomingCount: t.upcomingCount + g.upcomingCount,
+  }), { dueTotal: 0, dueCount: 0, upcomingTotal: 0, upcomingCount: 0 });
+  return { groups, totals };
+}
+
+// Volta um item do Histórico para "pendente" (desfaz um "marcar como recebido/pago").
+async function undoHistoryItem(type, id) {
+  const endpoints = {
+    aula: `/api/payments/class/${id}/mark-pending`,
+    mensalidade: `/api/payments/monthly-charge/${id}/mark-pending`,
+    fatura_professor: `/api/payments/invoice/${id}/mark-pending`,
+    despesa: `/api/expenses/${id}/mark-pending`,
+  };
+  const ok = await confirmModal('Voltar este item para pendente? Ele sai do Histórico e do Financeiro e volta para a lista de pendências, até você marcá-lo de novo.', 'Voltar para pendente');
+  if (!ok) return false;
+  await api.post(endpoints[type]);
+  showToast('Voltou para pendente.');
+  return true;
+}
+
 async function deleteHistoryItem(type, id) {
   const messages = {
     aula: 'Excluir esta aula do histórico? Ela será removida de tudo — calendários, pagamentos e cálculos de quinzena — como se nunca tivesse existido.',
@@ -27,16 +90,16 @@ async function deleteHistoryItem(type, id) {
 }
 
 Pages.payments = async function (root) {
-  let currentTab = 'receber';
+  let currentTab = 'avulsos';
   root.innerHTML = `
     <div class="page-header">
       <div><div class="eyebrow">Financeiro</div><h1>Pagamentos</h1>
         <p class="subtitle">Pendências não desaparecem sozinhas — elas ficam aqui até serem marcadas como recebidas ou pagas.</p></div>
     </div>
     <div class="tabs">
-      <button class="tab-btn active" data-tab="receber">A receber</button>
+      <button class="tab-btn active" data-tab="avulsos">Pagamentos avulsos</button>
+      <button class="tab-btn" data-tab="mensais">Pagamentos mensais</button>
       <button class="tab-btn" data-tab="pagar">A pagar (professores)</button>
-      <button class="tab-btn" data-tab="especiais">Pagamentos especiais</button>
       <button class="tab-btn" data-tab="despesas">Despesas</button>
       <button class="tab-btn" data-tab="historico">Histórico</button>
     </div>
@@ -54,38 +117,84 @@ Pages.payments = async function (root) {
   async function renderTab() {
     const body = document.getElementById('pay-body');
     body.innerHTML = '<div class="loading-dots">Carregando…</div>';
-    if (currentTab === 'receber') await renderReceber(body);
+    if (currentTab === 'avulsos') await renderAvulsos(body);
+    else if (currentTab === 'mensais') await renderMensais(body);
     else if (currentTab === 'pagar') await renderPagar(body);
-    else if (currentTab === 'especiais') await renderEspeciais(body);
     else if (currentTab === 'despesas') await renderDespesas(body);
     else if (currentTab === 'historico') await renderHistorico(body);
   }
 
-  async function renderReceber(body) {
+  async function renderAvulsos(body) {
     const rows = await api.get('/api/payments/receivable');
-    const total = rows.reduce((s, r) => s + Number(r.student_value), 0);
+    const { groups, totals } = groupReceivable(rows);
+    const monthLabel = (key) => `${MONTH_NAMES[Number(key.slice(5, 7)) - 1]} de ${key.slice(0, 4)}`;
+
     body.innerHTML = `
       <div class="card">
-        <div class="card-header"><h2>Aulas a receber</h2><span class="badge badge-pending tabular">${formatCurrency(total)} pendente</span></div>
-        ${rows.length === 0 ? `<div class="empty-state">Nada pendente por aqui.</div>` : `
-        <div class="table-wrap"><table>
-          <thead><tr><th>Data</th><th>Aluno</th><th>Disciplina</th><th class="num">Valor</th><th></th></tr></thead>
-          <tbody>${rows.map(r => `
-            <tr>
-              <td>${formatDate(r.start_time)}</td>
-              <td><a href="#/alunos/${r.student_id}">${escapeHtml(r.student_name)}</a></td>
-              <td>${escapeHtml(r.subject_name)}</td>
-              <td class="num tabular">${formatCurrency(r.student_value)}</td>
-              <td><button class="btn btn-outline btn-sm" data-mark="${r.id}">Marcar recebido</button></td>
-            </tr>`).join('')}</tbody>
-        </table></div>`}
+        <div class="card-header"><h2>Pagamentos avulsos</h2>
+          <span class="badge badge-pending tabular">${formatCurrency(totals.dueTotal)} a receber agora</span></div>
+        <p class="text-sm muted mt-0">Alunos que pagam <strong>por aula</strong>: cada aula é cobrada separadamente. Alunos marcados como pagamento mensal no cadastro não aparecem aqui — ficam em "Pagamentos mensais".
+          "A receber agora" soma só as aulas que <strong>já aconteceram</strong> e ainda não foram pagas. As aulas futuras já agendadas aparecem em cada aluno, mas só viram cobrança quando acontecerem — se o aluno pagar adiantado, dá para marcar como recebido antes.</p>
+        ${totals.upcomingCount > 0 ? `<p class="text-sm muted" style="margin-bottom:0;">Além disso: ${formatCurrency(totals.upcomingTotal)} em ${pluralPt(totals.upcomingCount, 'aula futura já agendada', 'aulas futuras já agendadas')}, ainda não vencidas.</p>` : ''}
       </div>
+      ${groups.length === 0 ? `<div class="card"><div class="empty-state">Nada pendente por aqui.</div></div>` : groups.map((g, gi) => `
+        <div class="card">
+          <div class="card-header">
+            <h2><a href="#/alunos/${g.student_id}">${escapeHtml(g.student_name)}</a></h2>
+            <span class="flex gap-8">
+              ${g.dueCount > 0 ? `<span class="badge badge-pending tabular">${formatCurrency(g.dueTotal)} a receber agora</span>` : ''}
+              ${g.upcomingCount > 0 ? `<span class="badge badge-neutral tabular">${formatCurrency(g.upcomingTotal)} em aulas futuras</span>` : ''}
+            </span>
+          </div>
+          ${g.months.map((m, mi) => `
+            <div class="day-section-title" style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
+              <span>${monthLabel(m.key)} · ${pluralPt(m.rows.length, 'aula', 'aulas')}</span>
+              <span class="flex gap-8" style="align-items:center;">
+                <span class="tabular">${formatCurrency(m.total)}</span>
+                <button class="btn btn-outline btn-sm" data-bulk="${gi}:${mi}">Marcar o mês como recebido</button>
+              </span>
+            </div>
+            <div class="table-wrap"><table>
+              <thead><tr><th>Data</th><th>Disciplina</th><th class="num">Valor</th><th>Situação</th><th></th></tr></thead>
+              <tbody>${m.rows.map(r => `
+                <tr>
+                  <td>${formatDate(r.start_time)}</td>
+                  <td>${escapeHtml(r.subject_name)}</td>
+                  <td class="num tabular">${formatCurrency(r.student_value)}</td>
+                  <td>${r.happened ? '<span class="badge badge-pending">A receber</span>' : '<span class="badge badge-neutral">Ainda não aconteceu</span>'}</td>
+                  <td><button class="btn btn-outline btn-sm" data-mark="${r.id}">Marcar recebido</button></td>
+                </tr>`).join('')}</tbody>
+            </table></div>
+          `).join('')}
+        </div>`).join('')}
     `;
+
     body.querySelectorAll('[data-mark]').forEach(btn => {
       btn.addEventListener('click', async () => {
         await api.post(`/api/payments/class/${btn.dataset.mark}/mark-paid`);
         showToast('Marcado como recebido.');
-        renderReceber(body);
+        renderAvulsos(body);
+      });
+    });
+
+    // Receber o mês de um aluno de uma vez. Confirmação explícita porque mexe em várias aulas
+    // (e, se houver aulas futuras no mês, é um pagamento antecipado).
+    body.querySelectorAll('[data-bulk]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const [gi, mi] = btn.dataset.bulk.split(':').map(Number);
+        const g = groups[gi];
+        const m = g.months[mi];
+        const ids = m.rows.map(r => r.id);
+        const ok = await confirmModal(
+          `Marcar ${pluralPt(ids.length, 'aula', 'aulas')} de ${g.student_name} em ${monthLabel(m.key)} como ${ids.length === 1 ? 'recebida' : 'recebidas'}, num total de ${formatCurrency(m.total)}?` +
+          (m.upcomingCount > 0 ? ` Isso inclui ${pluralPt(m.upcomingCount, 'aula que ainda não aconteceu', 'aulas que ainda não aconteceram')} (pagamento antecipado).` : '') +
+          ' Se marcar sem querer, dá para voltar para pendente pelo Histórico.',
+          'Marcar como recebidas'
+        );
+        if (!ok) return;
+        const res = await api.post('/api/payments/class/mark-paid-bulk', { ids });
+        showToast(`${pluralPt(res.updated, 'aula marcada como recebida', 'aulas marcadas como recebidas')}.`);
+        renderAvulsos(body);
       });
     });
   }
@@ -111,16 +220,15 @@ Pages.payments = async function (root) {
       </div>
       <div class="card">
         <div class="card-header"><h2>Quinzenas em andamento</h2></div>
-        <p class="text-sm muted mt-0">Ainda não viraram fatura — a quinzena atual só fecha no dia 16 ou no dia 1º do mês seguinte. Mostrado aqui só para acompanhamento.</p>
+        <p class="text-sm muted mt-0">Ainda não viraram fatura — a quinzena atual só fecha no dia 16 ou no dia 1º do mês seguinte. <strong>Previsto</strong> é o que a fatura terá se nada mudar: soma todas as aulas agendadas na quinzena, as que já aconteceram e as que ainda vão acontecer. <strong>Já dado</strong> é só a parte que já aconteceu até agora.</p>
         ${inProgress.length === 0 ? `<div class="empty-state">Nenhuma aula lançada na quinzena atual ainda.</div>` : `
         <div class="table-wrap"><table>
-          <thead><tr><th>Professor</th><th>Período</th><th class="num">Horas até agora</th><th class="num">Transporte</th><th class="num">Valor até agora</th></tr></thead>
+          <thead><tr><th>Professor</th><th>Período</th><th class="num">Já dado</th><th class="num">Previsto na quinzena</th></tr></thead>
           <tbody>${inProgress.map(r => `
             <tr><td><a href="#/professores/${r.teacher_id}">${escapeHtml(r.teacher_name)}</a></td>
               <td>${formatDate(r.period_start)} – ${formatDate(r.period_end)}</td>
-              <td class="num tabular">${r.totalHours}h</td>
-              <td class="num tabular">${formatCurrency(r.totalTransport)}</td>
-              <td class="num tabular">${formatCurrency(r.totalValue)}</td></tr>`).join('')}</tbody>
+              <td class="num tabular">${formatCurrency(r.given.totalValue)}<div class="text-sm muted">${pluralPt(r.given.count, 'aula', 'aulas')} · ${r.given.totalHours}h</div></td>
+              <td class="num tabular">${formatCurrency(r.totalValue)}<div class="text-sm muted">${pluralPt(r.count, 'aula', 'aulas')} · ${r.totalHours}h · inclui ${formatCurrency(r.totalTransport)} de transporte</div></td></tr>`).join('')}</tbody>
         </table></div>`}
       </div>
     `;
@@ -133,56 +241,44 @@ Pages.payments = async function (root) {
     });
   }
 
-  async function renderEspeciais(body) {
-    const rows = await api.get('/api/payments/special');
-    const total = rows.reduce((s, r) => s + Number(r.value), 0);
+  async function renderMensais(body) {
+    const rows = await api.get('/api/payments/monthly');
+    const total = rows.reduce((s, r) => s + Number(r.total), 0);
     body.innerHTML = `
       <div class="card">
-        <div class="card-header"><h2>Pagamentos especiais (mensalistas)</h2><span class="badge badge-pending tabular">${formatCurrency(total)} pendente</span></div>
-        <p class="text-sm muted mt-0">Alunos com pagamento mensal marcado no cadastro. As aulas deles continuam no calendário normalmente, mas entram aqui em vez de na lista por aula. Toda mensalidade começa em R$ 0,00 — defina o valor de cada mês clicando em "Definir valor".</p>
+        <div class="card-header"><h2>Pagamentos mensais</h2><span class="badge badge-pending tabular">${formatCurrency(total)} pendente</span></div>
+        <p class="text-sm muted mt-0">Alunos marcados como <strong>pagamento mensal</strong> no cadastro. Em vez de cobrar aula a aula, é uma cobrança por mês, com o <strong>total de todas as aulas do aluno naquele mês somadas</strong> (o "valor que o aluno paga" de cada aula, definido no agendamento). O mês inteiro conta, inclusive as aulas que ainda vão acontecer; aulas canceladas não entram.
+          Enquanto a mensalidade estiver pendente, o total acompanha as aulas (se uma aula for adicionada, editada ou cancelada, ele muda sozinho). Depois de marcada como recebida, o valor recebido fica fixo.</p>
         ${rows.length === 0 ? `<div class="empty-state">Nenhuma mensalidade pendente.</div>` : `
         <div class="table-wrap"><table>
-          <thead><tr><th>Aluno</th><th>Referência</th><th class="num">Valor mensal</th><th></th></tr></thead>
-          <tbody>${rows.map(r => `
+          <thead><tr><th>Aluno</th><th>Mês</th><th>Aulas</th><th class="num">Total do mês</th><th></th></tr></thead>
+          <tbody>${rows.map((r, i) => `
             <tr>
-              <td><a href="#/alunos/${r.student_id}">${escapeHtml(r.student_name)}</a></td>
-              <td>${pad2(r.month)}/${r.year}</td>
-              <td class="num tabular">${formatCurrency(r.value)}</td>
-              <td class="flex gap-8">
-                <button class="btn btn-outline btn-sm" data-edit="${r.id}" data-current="${r.value}">${Number(r.value) > 0 ? 'Editar valor' : 'Definir valor'}</button>
-                <button class="btn btn-outline btn-sm" data-mark="${r.id}">Marcar recebido</button>
-              </td>
+              <td><a href="#/alunos/${r.student_id}">${escapeHtml(r.student_name)}</a>
+                <div class="text-sm muted">Aulas em: ${r.dates.join(', ')}</div>
+                ${r.zeroValueCount > 0 ? `<div class="text-sm" style="color:var(--danger);">${pluralPt(r.zeroValueCount, 'aula está com valor R$ 0,00', 'aulas estão com valor R$ 0,00')} — ajuste o valor na agenda, senão a mensalidade sai menor do que deveria.</div>` : ''}</td>
+              <td>${MONTH_NAMES[r.month - 1]}/${r.year}</td>
+              <td>${pluralPt(r.classCount, 'aula', 'aulas')}<div class="text-sm muted">${r.doneCount} já realizada${r.doneCount === 1 ? '' : 's'}</div></td>
+              <td class="num tabular">${formatCurrency(r.total)}</td>
+              <td><button class="btn btn-outline btn-sm" data-mark="${i}">Marcar recebido</button></td>
             </tr>`).join('')}</tbody>
         </table></div>`}
       </div>
     `;
     body.querySelectorAll('[data-mark]').forEach(btn => {
       btn.addEventListener('click', async () => {
-        await api.post(`/api/payments/monthly-charge/${btn.dataset.mark}/mark-paid`);
+        const r = rows[Number(btn.dataset.mark)];
+        // Ao marcar como recebida o valor fica fixo; se ainda há aulas por vir no mês, avisa.
+        if (r.classCount > r.doneCount) {
+          const ok = await confirmModal(
+            `Esta mensalidade ainda tem ${pluralPt(r.classCount - r.doneCount, 'aula por vir', 'aulas por vir')}. Se marcar como recebida agora, o valor recebido fica fixado em ${formatCurrency(r.total)} — aulas adicionadas depois não entram nele. Marcar mesmo assim?`,
+            'Marcar como recebida'
+          );
+          if (!ok) return;
+        }
+        await api.post(`/api/payments/monthly-charge/${r.id}/mark-paid`);
         showToast('Mensalidade marcada como recebida.');
-        renderEspeciais(body);
-      });
-    });
-    body.querySelectorAll('[data-edit]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const chargeId = btn.dataset.edit;
-        const backdrop = openModal(`
-          <div class="modal-header"><h3>Valor da mensalidade</h3><button class="modal-close" id="mv-close">&times;</button></div>
-          <form id="monthly-value-form">
-            <div class="field"><label for="mv-value">Valor (R$)</label>
-              <input type="number" step="0.01" min="0" id="mv-value" value="${btn.dataset.current}" required autofocus></div>
-            <div class="form-actions"><button type="button" class="btn btn-outline" id="mv-cancel">Cancelar</button><button type="submit" class="btn btn-primary">Salvar</button></div>
-          </form>
-        `);
-        backdrop.querySelector('#mv-close').onclick = closeModal;
-        backdrop.querySelector('#mv-cancel').onclick = closeModal;
-        backdrop.querySelector('#monthly-value-form').addEventListener('submit', async (e) => {
-          e.preventDefault();
-          await api.put(`/api/payments/monthly-charge/${chargeId}`, { value: Number(backdrop.querySelector('#mv-value').value) });
-          closeModal();
-          showToast('Valor atualizado.');
-          renderEspeciais(body);
-        });
+        renderMensais(body);
       });
     });
   }
@@ -380,8 +476,36 @@ Pages.payments = async function (root) {
     async function renderStudentMonth() {
       detailEl.innerHTML = `<div class="card"><div class="loading-dots">Carregando…</div></div>`;
       const data = await api.get(`/api/payments/student/${selectedStudent.id}/month?year=${viewYear}&month=${viewMonth}`);
-      const totalPending = data.classes.filter(c => !c.student_paid).reduce((s, c) => s + Number(c.student_value), 0)
-        + (data.monthlyCharge && data.monthlyCharge.status === 'pending' ? Number(data.monthlyCharge.value) : 0);
+      const m = data.monthly;            // preenchido só para aluno de pagamento mensal
+      const mesNome = MONTH_NAMES[viewMonth - 1];
+      let summaryHtml;
+      if (m) {
+        // Mensalista: vale a mensalidade do mês (soma das aulas), não o status de cada aula.
+        const c = m.charge;
+        let statusBadge;
+        let note = '';
+        if (!c) {
+          statusBadge = '<span class="badge badge-neutral">Sem cobrança registrada neste mês</span>';
+        } else if (c.status === 'paid') {
+          statusBadge = '<span class="badge badge-confirmed">Recebida</span>';
+          if (Math.abs(Number(c.value) - Number(m.total)) > 0.005) {
+            note = `<div class="text-sm" style="color:var(--danger); margin-top:6px;">Recebido: ${formatCurrency(c.value)} — mas o total atual das aulas do mês é ${formatCurrency(m.total)}. As aulas mudaram depois do pagamento.</div>`;
+          }
+        } else {
+          statusBadge = '<span class="badge badge-pending">Pendente</span>';
+        }
+        const shown = c && c.status === 'paid' ? c.value : m.total;
+        summaryHtml = `
+          <div class="alert alert-info">
+            <strong>Pagamento mensal.</strong> Mensalidade de ${mesNome}: ${formatCurrency(shown)} (${pluralPt(m.classCount, 'aula', 'aulas')}) ${statusBadge}${note}
+            ${m.zeroValueCount > 0 ? `<div class="text-sm" style="color:var(--danger); margin-top:6px;">${pluralPt(m.zeroValueCount, 'aula está com valor R$ 0,00', 'aulas estão com valor R$ 0,00')}.</div>` : ''}
+          </div>`;
+      } else {
+        const totalPending = data.classes.filter(c => !c.student_paid).reduce((sum, c) => sum + Number(c.student_value), 0);
+        summaryHtml = totalPending > 0
+          ? `<div class="alert alert-info">${formatCurrency(totalPending)} pendente neste mês.</div>`
+          : `<div class="alert alert-info">Tudo pago neste mês. ✓</div>`;
+      }
 
       detailEl.innerHTML = `
         <div class="card card-ruled">
@@ -393,25 +517,17 @@ Pages.payments = async function (root) {
               <button class="btn btn-outline btn-sm" id="hist-next-month">&rarr;</button>
             </div>
           </div>
-          ${totalPending > 0 ? `<div class="alert alert-info">${formatCurrency(totalPending)} pendente neste mês.</div>` : `<div class="alert alert-info">Tudo pago neste mês. ✓</div>`}
-          ${data.monthlyCharge ? `
-            <div class="flex-between" style="padding:10px 0; border-bottom:1px solid var(--border);">
-              <span>Mensalidade de ${MONTH_NAMES[viewMonth - 1]}</span>
-              <span class="flex gap-8">
-                <span class="tabular">${formatCurrency(data.monthlyCharge.value)}</span>
-                ${data.monthlyCharge.status === 'paid' ? '<span class="badge badge-confirmed">Pago</span>' : '<span class="badge badge-pending">Pendente</span>'}
-              </span>
-            </div>` : ''}
+          ${summaryHtml}
           ${data.classes.length === 0 ? `<div class="empty-state">Nenhuma aula neste mês.</div>` : `
           <div class="table-wrap"><table>
-            <thead><tr><th>Data</th><th>Disciplina</th><th>Professor</th><th class="num">Valor</th><th>Status</th></tr></thead>
+            <thead><tr><th>Data</th><th>Disciplina</th><th>Professor</th><th class="num">Valor</th>${m ? '' : '<th>Status</th>'}</tr></thead>
             <tbody>${data.classes.map(c => `
               <tr>
                 <td>${formatDate(c.start_time)}</td>
                 <td>${escapeHtml(c.subject_name)}</td>
                 <td>${escapeHtml(c.teacher_name)}</td>
                 <td class="num tabular">${formatCurrency(c.student_value)}</td>
-                <td>${c.student_paid ? '<span class="badge badge-confirmed">Pago</span>' : '<span class="badge badge-pending">Pendente</span>'}</td>
+                ${m ? '' : `<td>${c.student_paid ? '<span class="badge badge-confirmed">Pago</span>' : '<span class="badge badge-pending">Pendente</span>'}</td>`}
               </tr>`).join('')}</tbody>
           </table></div>`}
         </div>
@@ -479,7 +595,7 @@ Pages.payments = async function (root) {
 
       // Cada categoria só tem um tipo de registro, então a coluna de "referência" pode
       // ter um nome específico e autoexplicativo, em vez de um genérico "Referência".
-      const referenceLabel = { alunos: 'Data da aula', professores: 'Início da quinzena', despesas: 'Vencimento' }[generalCategory];
+      const referenceLabel = { alunos: 'Data da aula / mês', professores: 'Início da quinzena', despesas: 'Vencimento' }[generalCategory];
       const nameLabel = { alunos: 'Aluno', professores: 'Professor', despesas: 'Descrição' }[generalCategory];
 
       catBody.innerHTML = sortedKeys.map(key => {
@@ -499,12 +615,21 @@ Pages.payments = async function (root) {
                 <td>${escapeHtml(String(r.reference_date || '').slice(0, 10))}</td>
                 <td class="num tabular">${formatCurrency(r.value)}</td>
                 <td>${r.paid_at ? formatDateTime(r.paid_at) : '—'}</td>
-                <td><button class="btn-text text-sm" data-del-hist="${r.id}" data-type="${r.type}">Excluir</button></td>
+                <td class="flex gap-10">
+                  <button class="btn-text text-sm" data-undo-hist="${r.id}" data-type="${r.type}">Voltar para pendente</button>
+                  <button class="btn-text text-sm" data-del-hist="${r.id}" data-type="${r.type}">Excluir</button>
+                </td>
               </tr>`).join('')}</tbody>
           </table></div>
         `;
       }).join('');
 
+      catBody.querySelectorAll('[data-undo-hist]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const undone = await undoHistoryItem(btn.dataset.type, btn.dataset.undoHist);
+          if (undone) renderCategoryBody();
+        });
+      });
       catBody.querySelectorAll('[data-del-hist]').forEach(btn => {
         btn.addEventListener('click', async () => {
           const deleted = await deleteHistoryItem(btn.dataset.type, btn.dataset.delHist);
