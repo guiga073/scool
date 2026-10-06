@@ -189,6 +189,26 @@ ensureColumn('teachers', 'transport_value', 'REAL DEFAULT 10');
 ensureColumn('classes', 'transport_value', 'REAL DEFAULT 0');
 ensureColumn('expenses', 'recurring_expense_id', 'INTEGER REFERENCES recurring_expenses(id)');
 
+// Links de aula antigos: antes o link era salvo exatamente como digitado, e um link sem
+// "https://" (ex.: "meet.google.com/abc") não abre pelo botão "Abrir link" — o navegador
+// o entende como um endereço dentro do próprio portal. Aqui eles são corrigidos de forma
+// segura: só completa o "https://" (nunca apaga nem troca o link). Roda a cada início do
+// servidor, mas só mexe no que ainda estiver sem https.
+{
+  const { normalizeMeetingLink } = require('./links');
+  const rows = db.prepare("SELECT id, meeting_link FROM classes WHERE meeting_link IS NOT NULL AND TRIM(meeting_link) != ''").all();
+  const update = db.prepare('UPDATE classes SET meeting_link = ? WHERE id = ?');
+  let fixed = 0;
+  let invalid = 0;
+  for (const r of rows) {
+    const n = normalizeMeetingLink(r.meeting_link);
+    if (!n.ok) { invalid++; continue; }
+    if (n.value !== r.meeting_link) { update.run(n.value, r.id); fixed++; }
+  }
+  if (fixed > 0) console.log(`[setup] Links de aula corrigidos para https://: ${fixed}`);
+  if (invalid > 0) console.log(`[setup] ATENÇÃO: ${invalid} aula(s) com link inválido (não alterado(s)). Edite a aula para corrigir.`);
+}
+
 // A tabela de sessões mudou de "sempre admin" (admin_id) para "admin ou professor"
 // (user_type + user_id). Sessões são só tokens de login temporários — se o formato
 // antigo for encontrado, é mais simples recriar a tabela (todo mundo só precisa

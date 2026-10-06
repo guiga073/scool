@@ -120,7 +120,7 @@ async function renderAulas(el) {
         </div>
         <div>${cls.modality === 'presencial'
           ? `<div class="text-sm muted">Endereço</div><p>${cls.student_address ? escapeHtml(cls.student_address) : '<span class="muted">Aluno sem endereço cadastrado</span>'}</p>`
-          : `<div class="text-sm muted">Link</div><p>${cls.meeting_link ? `<a href="${escapeHtml(cls.meeting_link)}" target="_blank" rel="noopener">Abrir link</a>` : '—'}</p>`}</div>
+          : `<div class="text-sm muted">Link</div><p>${meetingLinkHtml(cls.meeting_link)}</p>`}</div>
         <div><div class="text-sm muted">Você recebe</div><p class="tabular">${formatCurrency(cls.teacher_value)}</p></div>
       `);
       document.getElementById('pc-close').onclick = closeModal;

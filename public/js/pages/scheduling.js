@@ -126,7 +126,8 @@ async function openClassFormModal(options, onSaved) {
         <div class="hint">Valor fixo por aula, preenchido a partir do transporte cadastrado do professor — pode editar. Só se aplica a aulas presenciais.</div>
       </div>
       <div class="field"><label for="cf-link">Link da aula (Google Meet ou outra plataforma)</label>
-        <input type="text" id="cf-link" placeholder="https://meet.google.com/…" value="${escapeHtml(existing && existing.meeting_link || '')}"></div>
+        <input type="text" id="cf-link" placeholder="https://meet.google.com/…" value="${escapeHtml(existing && existing.meeting_link || '')}" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false">
+        <div class="hint" id="cf-link-hint">O portal sempre salva o link com https:// — se você colar sem, ele completa sozinho.</div></div>
 
       <div id="cf-conflict-area"></div>
       <div id="cf-error" class="alert alert-danger hidden"></div>
@@ -230,6 +231,25 @@ async function openClassFormModal(options, onSaved) {
     });
   }
 
+  // Link da aula: o portal sempre salva com "https://". Ao sair do campo, mostra o link já
+  // completo (ou avisa o que está errado); o servidor confere de novo na hora de salvar.
+  const linkInput = backdrop.querySelector('#cf-link');
+  const linkHint = backdrop.querySelector('#cf-link-hint');
+  const LINK_HINT_PADRAO = linkHint.textContent;
+  function mostrarEstadoDoLink(r) {
+    linkHint.textContent = r.ok ? LINK_HINT_PADRAO : r.error;
+    linkHint.classList.toggle('hint-error', !r.ok);
+    if (r.ok) linkInput.removeAttribute('aria-invalid'); else linkInput.setAttribute('aria-invalid', 'true');
+  }
+  linkInput.addEventListener('blur', () => {
+    const r = normalizeMeetingLink(linkInput.value);
+    mostrarEstadoDoLink(r);
+    if (r.ok && r.value !== null && r.value !== linkInput.value) linkInput.value = r.value; // mostra o https:// que foi completado
+  });
+  linkInput.addEventListener('input', () => {
+    if (linkInput.getAttribute('aria-invalid') === 'true') mostrarEstadoDoLink(normalizeMeetingLink(linkInput.value));
+  });
+
   backdrop.querySelector('#class-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const errEl = backdrop.querySelector('#cf-error');
@@ -249,6 +269,9 @@ async function openClassFormModal(options, onSaved) {
     };
 
     try {
+      const link = normalizeMeetingLink(base.meeting_link);
+      if (!link.ok) { mostrarEstadoDoLink(link); linkInput.focus(); throw new Error(link.error); }
+      base.meeting_link = link.value || '';
       if (isRecurring) {
         const dateTo = backdrop.querySelector('#cf-date-to').value;
         if (!dateTo) throw new Error('Informe a data final da recorrência');
@@ -304,7 +327,7 @@ async function openClassDetailModal(cls, onChanged) {
       <div><div class="text-sm muted">Modalidade</div><p>${cls.modality === 'online' ? 'Online' : 'Presencial'}</p></div>
       ${cls.modality === 'presencial'
         ? `<div><div class="text-sm muted">Endereço</div><p>${cls.student_address ? escapeHtml(cls.student_address) : '<span class="muted">Aluno sem endereço cadastrado</span>'}</p></div>`
-        : `<div><div class="text-sm muted">Link</div><p>${cls.meeting_link ? `<a href="${escapeHtml(cls.meeting_link)}" target="_blank" rel="noopener">Abrir link</a>` : '—'}</p></div>`}
+        : `<div><div class="text-sm muted">Link</div><p>${meetingLinkHtml(cls.meeting_link)}</p></div>`}
     </div>
     <div class="field-row">
       <div><div class="text-sm muted">Aluno paga</div><p class="tabular">${formatCurrency(cls.student_value)} ${cls.student_paid ? '<span class="badge badge-confirmed">Recebido</span>' : '<span class="badge badge-pending">Pendente</span>'}</p></div>

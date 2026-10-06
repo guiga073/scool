@@ -65,7 +65,7 @@ async function renderAulas(el) {
           <div><div class="text-sm muted">Professor</div><p>${escapeHtml(cls.teacher_name)}</p></div>
           <div><div class="text-sm muted">Modalidade</div><p>${cls.modality === 'online' ? 'Online' : 'Presencial'}</p></div>
         </div>
-        ${cls.modality === 'online' ? `<div><div class="text-sm muted">Link</div><p>${cls.meeting_link ? `<a href="${escapeHtml(cls.meeting_link)}" target="_blank" rel="noopener">Abrir link</a>` : '—'}</p></div>` : ''}
+        ${cls.modality === 'online' ? `<div><div class="text-sm muted">Link</div><p>${meetingLinkHtml(cls.meeting_link)}</p></div>` : ''}
       `);
       document.getElementById('ac-close').onclick = closeModal;
     },

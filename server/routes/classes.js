@@ -4,6 +4,7 @@ const { db } = require('../db');
 const { sendJson, httpError } = require('../router');
 const { requireAuth } = require('./auth');
 const svc = require('../services');
+const { normalizeMeetingLink } = require('../links');
 
 const CLASS_SELECT = `
   SELECT classes.*, students.name AS student_name, students.address AS student_address,
@@ -25,6 +26,15 @@ function validateClassBody(b) {
   }
   if (b.start_time >= b.end_time) throw httpError(400, 'O horário de término deve ser depois do horário de início');
   if (!['online', 'presencial'].includes(b.modality)) throw httpError(400, "Modalidade deve ser 'online' ou 'presencial'");
+}
+
+// Link da aula: sempre salvo com "https://" (completa se faltar; recusa o que não for endereço
+// da internet). Chamado ANTES de gravar qualquer coisa, para nunca deixar uma aula (ou uma série
+// inteira de aulas recorrentes) pela metade por causa de um link inválido.
+function cleanMeetingLink(b) {
+  const r = normalizeMeetingLink(b.meeting_link);
+  if (!r.ok) throw httpError(400, r.error);
+  return r.value;
 }
 
 function register(router) {
@@ -52,6 +62,7 @@ function register(router) {
     requireAuth(req);
     const b = req.body;
     validateClassBody(b);
+    const meetingLink = cleanMeetingLink(b);
 
     const conflicts = svc.findConflicts(db, {
       teacherId: b.teacher_id, studentId: b.student_id, startTime: b.start_time, endTime: b.end_time,
@@ -62,7 +73,7 @@ function register(router) {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       b.student_id, b.teacher_id, b.subject_id, b.modality, b.start_time, b.end_time,
-      Number(b.student_value) || 0, Number(b.teacher_value) || 0, Number(b.transport_value) || 0, b.meeting_link || null
+      Number(b.student_value) || 0, Number(b.teacher_value) || 0, Number(b.transport_value) || 0, meetingLink
     );
 
     svc.syncInvoiceForDate(db, b.teacher_id, new Date(b.start_time.replace(' ', 'T')));
@@ -83,6 +94,7 @@ function register(router) {
     // Mesmas checagens da aula avulsa — sem elas, um horário digitado errado criaria a série inteira quebrada.
     if (b.start_time >= b.end_time) throw httpError(400, 'O horário de término deve ser depois do horário de início');
     if (!['online', 'presencial'].includes(b.modality)) throw httpError(400, "Modalidade deve ser 'online' ou 'presencial'");
+    const meetingLink = cleanMeetingLink(b);
 
     const occurrences = svc.buildRecurringOccurrences({
       dayOfWeek: Number(b.day_of_week), startTime: b.start_time, endTime: b.end_time,
@@ -107,7 +119,7 @@ function register(router) {
       });
       const info = insert.run(
         b.student_id, b.teacher_id, b.subject_id, b.modality, occ.startTime, occ.endTime,
-        Number(b.student_value) || 0, Number(b.teacher_value) || 0, Number(b.transport_value) || 0, b.meeting_link || null, groupId
+        Number(b.student_value) || 0, Number(b.teacher_value) || 0, Number(b.transport_value) || 0, meetingLink, groupId
       );
       created.push(info.lastInsertRowid);
       if (conflicts.length > 0) conflictsByDate.push({ date: occ.startTime, conflicts });
@@ -124,6 +136,7 @@ function register(router) {
     if (!existing) throw httpError(404, 'Aula não encontrada');
     if (existing.status === 'cancelled') throw httpError(400, 'Não é possível editar uma aula cancelada');
     validateClassBody(b);
+    const meetingLink = cleanMeetingLink(b);
 
     const conflicts = svc.findConflicts(db, {
       teacherId: b.teacher_id, studentId: b.student_id, startTime: b.start_time, endTime: b.end_time,
@@ -136,7 +149,7 @@ function register(router) {
       WHERE id=?
     `).run(
       b.student_id, b.teacher_id, b.subject_id, b.modality, b.start_time, b.end_time,
-      Number(b.student_value) || 0, Number(b.teacher_value) || 0, Number(b.transport_value) || 0, b.meeting_link || null, req.params.id
+      Number(b.student_value) || 0, Number(b.teacher_value) || 0, Number(b.transport_value) || 0, meetingLink, req.params.id
     );
 
     // Recalcula faturas afetadas: período antigo (se o professor ou a data mudaram) e o período novo

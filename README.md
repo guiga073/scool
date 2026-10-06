@@ -326,6 +326,12 @@ possível por um terminal (Shell) no painel da Railway, substituindo o arquivo
   cada dia. Conflitos de horário **avisam** ("⚠️ Foram
   identificados conflitos.") mas nunca bloqueiam o agendamento. Aulas canceladas somem
   de todos os cálculos e telas.
+  **Link da aula sempre com `https://`:** se você digitar ou colar o link sem o `https://` (por exemplo,
+  `meet.google.com/abc-defg-hij`), o portal completa sozinho para `https://meet.google.com/abc-defg-hij` ao
+  sair do campo, e também confere de novo ao salvar. Se o texto não for um endereço da internet (por
+  exemplo `javascript:...`, com espaços ou sem domínio), ele avisa o motivo e não salva. Isso vale para aula
+  avulsa, recorrente e edição. Aulas antigas salvas sem `https://` são corrigidas automaticamente na
+  primeira vez que o servidor reinicia (aparece no log: "Links de aula corrigidos para https://").
 - **Pagamentos** — cinco abas: "Pagamentos avulsos", "Pagamentos mensais", "A pagar
   (professores)", "Despesas" e "Histórico". Nada pendente desaparece sozinho — só some
   da lista de pendentes quando você marca como recebido/pago.
@@ -424,6 +430,7 @@ o resto do sistema.
 ```
 server/           todo o backend (servidor, banco de dados, regras de negócio, rotas)
   db.js             conexão com o SQLite e criação das tabelas
+  links.js          regra do link da aula online (sempre https://)
   services.js        regras de negócio: quinzenas, conflitos, faturas, recorrência
   auth.js            login/senha/sessão
   router.js          roteador HTTP simples (sem framework)

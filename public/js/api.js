@@ -31,6 +31,48 @@ function escapeHtml(str) {
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
+// ---- Link da aula online ----
+// Mesma regra do servidor (server/links.js): o link sempre termina como "https://...".
+// Sem esquema ("meet.google.com/abc") ganha https://; "http://" vira "https://"; qualquer outro
+// tipo de endereço (javascript:, ftp:...) é recusado. Sem isso, o navegador entende um link sem
+// https:// como um endereço DENTRO do portal, e o botão "Abrir link" não abre a aula.
+// Retorna { ok: true, value, changed } ou { ok: false, error }.
+function normalizeMeetingLink(input) {
+  if (input === undefined || input === null) return { ok: true, value: null, changed: false };
+  const raw = String(input).trim();
+  if (raw === '') return { ok: true, value: null, changed: false };
+  if (raw.length > 1000) return { ok: false, error: 'O link da aula é grande demais.' };
+  if (/\s/.test(raw)) return { ok: false, error: 'O link da aula não pode ter espaços. Copie e cole o endereço completo.' };
+
+  let candidate;
+  const web = raw.match(/^https?:\/*(.*)$/i); // https://x   http://x   https:/x   https:x
+  if (web) {
+    candidate = 'https://' + web[1];
+  } else if (raw.startsWith('//')) {
+    candidate = 'https:' + raw;
+  } else if (/^[a-z][a-z0-9+.-]*:(?!\d)/i.test(raw)) {
+    return { ok: false, error: 'O link da aula precisa ser um endereço da internet, como https://meet.google.com/...' };
+  } else {
+    candidate = 'https://' + raw;
+  }
+
+  const invalido = { ok: false, error: 'O link da aula não parece um endereço válido. Confira se copiou o link inteiro.' };
+  let url;
+  try { url = new URL(candidate); } catch (e) { return invalido; }
+  const dominioOk = /^[a-z0-9-]+(\.[a-z0-9-]+)+$/i.test(url.hostname);
+  if (url.protocol !== 'https:' || !dominioOk || url.username || url.password) return invalido;
+  return { ok: true, value: candidate, changed: candidate !== raw };
+}
+
+// HTML do "Abrir link" (usado nas telas do admin, do professor e do aluno). Normaliza na hora de
+// exibir, então até um link antigo salvo sem https:// abre direito.
+function meetingLinkHtml(link) {
+  if (link === null || link === undefined || String(link).trim() === '') return '—';
+  const r = normalizeMeetingLink(link);
+  if (!r.ok) return `<span class="muted" title="${escapeHtml(String(link))}">Link inválido</span>`;
+  return `<a href="${escapeHtml(r.value)}" target="_blank" rel="noopener noreferrer">Abrir link</a>`;
+}
+
 function formatCurrency(value) {
   const n = Number(value) || 0;
   return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
