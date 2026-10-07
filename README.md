@@ -335,6 +335,19 @@ possível por um terminal (Shell) no painel da Railway, substituindo o arquivo
 - **Pagamentos** — cinco abas: "Pagamentos avulsos", "Pagamentos mensais", "A pagar
   (professores)", "Despesas" e "Histórico". Nada pendente desaparece sozinho — só some
   da lista de pendentes quando você marca como recebido/pago.
+  - **Busca por nome e "Desfazer" (em todas as abas de lista).** No topo de **Pagamentos avulsos**,
+    **Pagamentos mensais**, **A pagar (professores)** e do **Histórico geral** há uma caixa de busca
+    por nome (aluno, professor ou despesa). Ela ignora maiúsculas e acentos ("jose" acha "José"),
+    procura em qualquer parte do nome ("ana" também acha "Mariana"), aceita várias palavras em
+    qualquer ordem ("souza ana") e continua ativa depois que você marca algo. O botão **×** ou a tecla
+    Esc limpam a busca; trocar de aba também. Com a busca ligada, o contador mostra "Mostrando X de Y"
+    e os totais (por mês no Histórico; no cabeçalho de Mensais e A pagar) passam a somar só o que
+    está à mostra. **Marcou como pago sem querer?** Logo depois de cada "Marcar recebido/pago" (aula,
+    mês inteiro, mensalidade, fatura de professor ou despesa) aparece uma mensagem com o botão
+    **Desfazer**, que fica 12 segundos e volta exatamente aquele item para pendente (no "mês inteiro",
+    só as aulas que aquele clique marcou; as que já estavam pagas antes continuam pagas). Marcações
+    em sequência geram mensagens empilhadas, cada uma com o seu Desfazer. Depois disso, o caminho
+    continua sendo o **Histórico**: busque pelo nome e use "Voltar para pendente".
   - **Pagamentos avulsos** — alunos que pagam **por aula**, cobrados aula a aula
     (alunos de pagamento mensal nunca aparecem aqui). A lista é agrupada **por aluno e,
     dentro de cada um, por mês**. O total "a receber agora" soma só as aulas que **já
@@ -369,7 +382,8 @@ possível por um terminal (Shell) no painel da Railway, substituindo o arquivo
   - Em **Histórico**, dá para buscar por **nome do aluno ou do responsável** e ver,
     mês a mês (com setas pra navegar entre meses), quais aulas daquele aluno já foram
     pagas e quais ainda estão pendentes — incluindo a mensalidade, se for aluno de
-    pagamento mensal. Sem busca, a tela mostra o histórico geral organizado em três
+    pagamento mensal. Na ficha do aluno, cada aula paga (e a mensalidade paga) também tem o botão
+    **"Voltar para pendente"**. Sem busca, a tela mostra o histórico geral organizado em três
     categorias (três botões no topo: "Recebido de alunos", "Pago a professores", "Pago
     em despesas"), cada uma agrupada mês a mês com o subtotal de cada mês, do mais
     recente para o mais antigo. Cada item do histórico geral tem um botão **"Voltar para pendente"** (desfaz o "marcar como recebido/pago" — útil se marcou sem querer) e um **"Excluir"**,

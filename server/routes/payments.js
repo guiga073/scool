@@ -41,18 +41,39 @@ function register(router) {
     if (ids.length === 0) throw httpError(400, 'Nenhuma aula informada');
     if (ids.length > 500) throw httpError(400, 'Aulas demais de uma vez (máximo 500)');
     const placeholders = ids.map(() => '?').join(',');
-    const info = db.prepare(`
+    // RETURNING devolve exatamente as aulas que mudaram agora (as que já estavam pagas ficam de fora);
+    // é isso que o botão "Desfazer" usa para reverter só o que este clique marcou.
+    const changed = db.prepare(`
       UPDATE classes SET student_paid = 1, student_paid_at = datetime('now', 'localtime')
       WHERE id IN (${placeholders}) AND status = 'scheduled' AND student_paid = 0
         AND student_id IN (SELECT id FROM students WHERE monthly_payment = 0)
-    `).run(...ids);
-    sendJson(res, 200, { updated: Number(info.changes) });
+      RETURNING id
+    `).all(...ids);
+    sendJson(res, 200, { updated: changed.length, ids: changed.map((r) => Number(r.id)) });
   });
 
   router.post('/api/payments/class/:id/mark-pending', async (req, res) => {
     requireAuth(req);
     db.prepare('UPDATE classes SET student_paid = 0, student_paid_at = NULL WHERE id = ?').run(req.params.id);
     sendJson(res, 200, { ok: true });
+  });
+
+  // Volta várias aulas para "pendente" de uma vez (desfaz o "marcar o mês como recebido"). Só mexe em
+  // aulas que estão pagas; as demais ficam como estão.
+  router.post('/api/payments/class/mark-pending-bulk', async (req, res) => {
+    requireAuth(req);
+    const ids = Array.isArray(req.body && req.body.ids)
+      ? req.body.ids.map(Number).filter((n) => Number.isInteger(n) && n > 0)
+      : [];
+    if (ids.length === 0) throw httpError(400, 'Nenhuma aula informada');
+    if (ids.length > 500) throw httpError(400, 'Aulas demais de uma vez (máximo 500)');
+    const placeholders = ids.map(() => '?').join(',');
+    const changed = db.prepare(`
+      UPDATE classes SET student_paid = 0, student_paid_at = NULL
+      WHERE id IN (${placeholders}) AND student_paid = 1
+      RETURNING id
+    `).all(...ids);
+    sendJson(res, 200, { updated: changed.length, ids: changed.map((r) => Number(r.id)) });
   });
 
   // ---- PAGAMENTOS MENSAIS (alunos marcados como "pagamento mensal" no cadastro) ----
@@ -78,7 +99,8 @@ function register(router) {
 
   router.post('/api/payments/monthly-charge/:id/mark-pending', async (req, res) => {
     requireAuth(req);
-    db.prepare("UPDATE monthly_charges SET status = 'pending', paid_at = NULL WHERE id = ?").run(req.params.id);
+    // value volta a 0, como era antes de ser recebida: enquanto pendente, o total é sempre calculado na hora.
+    db.prepare("UPDATE monthly_charges SET status = 'pending', paid_at = NULL, value = 0 WHERE id = ?").run(req.params.id);
     sendJson(res, 200, { ok: true });
   });
 

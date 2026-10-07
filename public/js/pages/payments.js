@@ -94,7 +94,7 @@ Pages.payments = async function (root) {
   root.innerHTML = `
     <div class="page-header">
       <div><div class="eyebrow">Financeiro</div><h1>Pagamentos</h1>
-        <p class="subtitle">Pendências não desaparecem sozinhas — elas ficam aqui até serem marcadas como recebidas ou pagas.</p></div>
+        <p class="subtitle">Pendências não desaparecem sozinhas — elas ficam aqui até serem marcadas como recebidas ou pagas. Marcou algo por engano? Toque em <strong>Desfazer</strong> na mensagem que aparece logo depois, ou use <strong>Voltar para pendente</strong> no Histórico.</p></div>
     </div>
     <div class="tabs">
       <button class="tab-btn active" data-tab="avulsos">Pagamentos avulsos</button>
@@ -110,9 +110,91 @@ Pages.payments = async function (root) {
       root.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       currentTab = btn.dataset.tab;
+      searchQuery = '';
       renderTab();
     });
   });
+
+  let searchQuery = '';            // texto digitado na busca por nome (vale para a aba aberta)
+
+  // minúsculas e sem acento: "José", "jose" e "JOSÉ" são a mesma coisa
+  const normalizeText = (v) => String(v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+
+  function searchBarHtml(placeholder) {
+    return `<div class="search-bar">
+      <div class="search-field">
+        <input type="search" class="search-input" id="pay-search" placeholder="${escapeHtml(placeholder)}" aria-label="${escapeHtml(placeholder)}" value="${escapeHtml(searchQuery)}" autocomplete="off">
+        <button type="button" class="search-clear hidden" id="pay-search-clear" aria-label="Limpar busca">&times;</button>
+      </div>
+      <span class="search-count" id="pay-search-count"></span>
+    </div>`;
+  }
+  const searchEmptyHtml = (what, nested) => nested
+    ? `<div class="empty-state hidden" id="pay-search-empty">Nenhum ${what} encontrado para “<span class="pay-search-q"></span>”.</div>`
+    : `<div class="card hidden" id="pay-search-empty"><div class="empty-state">Nenhum ${what} encontrado para “<span class="pay-search-q"></span>”.</div></div>`;
+
+  // Liga a caixa de busca (já desenhada no HTML) à lista da aba. Cada item da lista tem data-search (o nome,
+  // sem acento) e, se for dinheiro, data-value. Quem tem várias palavras ("ana paula") só aparece se tiver
+  // todas. Os grupos (.pay-group) somem quando ficam sem itens e, se tiverem um .pay-group-total, passam a
+  // mostrar a soma só do que sobrou. Escape ou o X limpam a busca.
+  function makeFilter(scope, itemSel) {
+    itemSel = itemSel || '.pay-item';
+    const input = scope.querySelector('#pay-search');
+    if (!input) return { apply() {} };
+    const clearBtn = scope.querySelector('#pay-search-clear');
+    const countEl = scope.querySelector('#pay-search-count');
+    const emptyEl = scope.querySelector('#pay-search-empty');
+    function apply() {
+      const tokens = normalizeText(searchQuery).split(/\s+/).filter(Boolean);
+      const items = Array.from(scope.querySelectorAll(itemSel));
+      let visible = 0;
+      items.forEach((el) => {
+        const hay = el.dataset.search || '';
+        const match = tokens.every((t) => hay.includes(t));
+        el.classList.toggle('hidden', !match);
+        if (match) visible++;
+      });
+      scope.querySelectorAll('.pay-group').forEach((g) => {
+        const all = Array.from(g.querySelectorAll(itemSel));
+        const shown = all.filter((el) => !el.classList.contains('hidden'));
+        if (all.length) g.classList.toggle('hidden', shown.length === 0);
+        const totalEl = g.querySelector('.pay-group-total');
+        if (totalEl) totalEl.textContent = formatCurrency(shown.reduce((sum, el) => sum + (Number(el.dataset.value) || 0), 0)) + (totalEl.dataset.suffix || '');
+      });
+      clearBtn.classList.toggle('hidden', !searchQuery);
+      countEl.textContent = tokens.length ? `Mostrando ${visible} de ${items.length}` : '';
+      if (emptyEl) {
+        emptyEl.classList.toggle('hidden', !(tokens.length && visible === 0));
+        const q = emptyEl.querySelector('.pay-search-q');
+        if (q) q.textContent = searchQuery.trim();
+      }
+    }
+    input.addEventListener('input', () => { searchQuery = input.value; apply(); });
+    input.addEventListener('keydown', (e) => { if (e.key === 'Escape') { input.value = ''; searchQuery = ''; apply(); } });
+    clearBtn.addEventListener('click', () => { input.value = ''; searchQuery = ''; apply(); input.focus(); });
+    apply();
+    return { apply };
+  }
+
+  // Recarrega a aba aberta com os dados novos (sem piscar "Carregando"). Se a pessoa já foi para outra aba
+  // ou saiu da página, não há nada a fazer: ao voltar, a lista é buscada de novo.
+  function refreshTab(tab) {
+    const body = document.getElementById('pay-body');
+    if (!body || currentTab !== tab) return;
+    ({ avulsos: renderAvulsos, mensais: renderMensais, pagar: renderPagar, despesas: renderDespesas })[tab](body);
+  }
+
+  // Depois de marcar algo como pago/recebido: aviso com "Desfazer" (12 s) que reverte exatamente aquele clique.
+  function offerUndo(tab, message, undoFn) {
+    showToast(message, null, {
+      actionLabel: 'Desfazer',
+      onAction: async () => {
+        await undoFn();
+        showToast('Desfeito: voltou para pendente.');
+        refreshTab(tab);
+      },
+    });
+  }
 
   async function renderTab() {
     const body = document.getElementById('pay-body');
@@ -130,6 +212,7 @@ Pages.payments = async function (root) {
     const monthLabel = (key) => `${MONTH_NAMES[Number(key.slice(5, 7)) - 1]} de ${key.slice(0, 4)}`;
 
     body.innerHTML = `
+      ${groups.length > 0 ? searchBarHtml('Buscar aluno pelo nome…') + searchEmptyHtml('aluno') : ''}
       <div class="card">
         <div class="card-header"><h2>Pagamentos avulsos</h2>
           <span class="badge badge-pending tabular">${formatCurrency(totals.dueTotal)} a receber agora</span></div>
@@ -138,7 +221,7 @@ Pages.payments = async function (root) {
         ${totals.upcomingCount > 0 ? `<p class="text-sm muted" style="margin-bottom:0;">Além disso: ${formatCurrency(totals.upcomingTotal)} em ${pluralPt(totals.upcomingCount, 'aula futura já agendada', 'aulas futuras já agendadas')}, ainda não vencidas.</p>` : ''}
       </div>
       ${groups.length === 0 ? `<div class="card"><div class="empty-state">Nada pendente por aqui.</div></div>` : groups.map((g, gi) => `
-        <div class="card">
+        <div class="card pay-item" data-search="${escapeHtml(normalizeText(g.student_name))}">
           <div class="card-header">
             <h2><a href="#/alunos/${g.student_id}">${escapeHtml(g.student_name)}</a></h2>
             <span class="flex gap-8">
@@ -169,10 +252,16 @@ Pages.payments = async function (root) {
         </div>`).join('')}
     `;
 
+    makeFilter(body);
+
     body.querySelectorAll('[data-mark]').forEach(btn => {
       btn.addEventListener('click', async () => {
-        await api.post(`/api/payments/class/${btn.dataset.mark}/mark-paid`);
-        showToast('Marcado como recebido.');
+        const id = btn.dataset.mark;
+        const r = rows.find(x => String(x.id) === String(id));
+        btn.disabled = true;
+        await api.post(`/api/payments/class/${id}/mark-paid`);
+        offerUndo('avulsos', `Recebido de ${r.student_name}: aula de ${formatDate(r.start_time)} (${formatCurrency(r.student_value)}).`,
+          () => api.post(`/api/payments/class/${id}/mark-pending`));
         renderAvulsos(body);
       });
     });
@@ -188,12 +277,18 @@ Pages.payments = async function (root) {
         const ok = await confirmModal(
           `Marcar ${pluralPt(ids.length, 'aula', 'aulas')} de ${g.student_name} em ${monthLabel(m.key)} como ${ids.length === 1 ? 'recebida' : 'recebidas'}, num total de ${formatCurrency(m.total)}?` +
           (m.upcomingCount > 0 ? ` Isso inclui ${pluralPt(m.upcomingCount, 'aula que ainda não aconteceu', 'aulas que ainda não aconteceram')} (pagamento antecipado).` : '') +
-          ' Se marcar sem querer, dá para voltar para pendente pelo Histórico.',
+          ' Se marcar sem querer, aparece um botão Desfazer logo em seguida (e também dá para voltar para pendente pelo Histórico).',
           'Marcar como recebidas'
         );
         if (!ok) return;
         const res = await api.post('/api/payments/class/mark-paid-bulk', { ids });
-        showToast(`${pluralPt(res.updated, 'aula marcada como recebida', 'aulas marcadas como recebidas')}.`);
+        const done = Array.isArray(res.ids) ? res.ids : ids;     // o Desfazer reverte só o que ESTE clique marcou
+        if (done.length > 0) {
+          offerUndo('avulsos', `${pluralPt(res.updated, 'aula marcada como recebida', 'aulas marcadas como recebidas')} (${g.student_name}, ${monthLabel(m.key)}).`,
+            () => api.post('/api/payments/class/mark-pending-bulk', { ids: done }));
+        } else {
+          showToast('Nenhuma aula mudou: já estavam marcadas.');
+        }
         renderAvulsos(body);
       });
     });
@@ -203,13 +298,14 @@ Pages.payments = async function (root) {
     const { invoices, inProgress } = await api.get('/api/payments/payable');
     const total = invoices.reduce((s, r) => s + Number(r.total_value), 0);
     body.innerHTML = `
-      <div class="card">
-        <div class="card-header"><h2>Faturas quinzenais pendentes</h2><span class="badge badge-pending tabular">${formatCurrency(total)} pendente</span></div>
+      ${(invoices.length + inProgress.length) > 0 ? searchBarHtml('Buscar professor pelo nome…') + searchEmptyHtml('professor') : ''}
+      <div class="card pay-group">
+        <div class="card-header"><h2>Faturas quinzenais pendentes</h2><span class="badge badge-pending tabular pay-group-total" data-suffix=" pendente">${formatCurrency(total)} pendente</span></div>
         ${invoices.length === 0 ? `<div class="empty-state">Nenhuma fatura pendente. Faturas são geradas automaticamente ao fim de cada quinzena (dia 16 e dia 1º).</div>` : `
         <div class="table-wrap"><table>
           <thead><tr><th>Professor</th><th>Período</th><th class="num">Horas</th><th class="num">Valor</th><th></th></tr></thead>
           <tbody>${invoices.map(r => `
-            <tr>
+            <tr class="pay-item" data-search="${escapeHtml(normalizeText(r.teacher_name))}" data-value="${Number(r.total_value) || 0}">
               <td><a href="#/professores/${r.teacher_id}">${escapeHtml(r.teacher_name)}</a></td>
               <td>${formatDate(r.period_start)} – ${formatDate(r.period_end)}</td>
               <td class="num tabular">${r.total_hours}h</td>
@@ -218,24 +314,30 @@ Pages.payments = async function (root) {
             </tr>`).join('')}</tbody>
         </table></div>`}
       </div>
-      <div class="card">
+      <div class="card pay-group">
         <div class="card-header"><h2>Quinzenas em andamento</h2></div>
         <p class="text-sm muted mt-0">Ainda não viraram fatura — a quinzena atual só fecha no dia 16 ou no dia 1º do mês seguinte. <strong>Previsto</strong> é o que a fatura terá se nada mudar: soma todas as aulas agendadas na quinzena, as que já aconteceram e as que ainda vão acontecer. <strong>Já dado</strong> é só a parte que já aconteceu até agora.</p>
         ${inProgress.length === 0 ? `<div class="empty-state">Nenhuma aula lançada na quinzena atual ainda.</div>` : `
         <div class="table-wrap"><table>
           <thead><tr><th>Professor</th><th>Período</th><th class="num">Já dado</th><th class="num">Previsto na quinzena</th></tr></thead>
           <tbody>${inProgress.map(r => `
-            <tr><td><a href="#/professores/${r.teacher_id}">${escapeHtml(r.teacher_name)}</a></td>
+            <tr class="pay-item" data-search="${escapeHtml(normalizeText(r.teacher_name))}"><td><a href="#/professores/${r.teacher_id}">${escapeHtml(r.teacher_name)}</a></td>
               <td>${formatDate(r.period_start)} – ${formatDate(r.period_end)}</td>
               <td class="num tabular">${formatCurrency(r.given.totalValue)}<div class="text-sm muted">${pluralPt(r.given.count, 'aula', 'aulas')} · ${r.given.totalHours}h</div></td>
               <td class="num tabular">${formatCurrency(r.totalValue)}<div class="text-sm muted">${pluralPt(r.count, 'aula', 'aulas')} · ${r.totalHours}h · inclui ${formatCurrency(r.totalTransport)} de transporte</div></td></tr>`).join('')}</tbody>
         </table></div>`}
       </div>
     `;
+    makeFilter(body);
+
     body.querySelectorAll('[data-mark]').forEach(btn => {
       btn.addEventListener('click', async () => {
-        await api.post(`/api/payments/invoice/${btn.dataset.mark}/mark-paid`);
-        showToast('Fatura marcada como paga.');
+        const id = btn.dataset.mark;
+        const r = invoices.find(x => String(x.id) === String(id));
+        btn.disabled = true;
+        await api.post(`/api/payments/invoice/${id}/mark-paid`);
+        offerUndo('pagar', `Pago a ${r.teacher_name}: quinzena de ${formatDate(r.period_start)} a ${formatDate(r.period_end)} (${formatCurrency(r.total_value)}).`,
+          () => api.post(`/api/payments/invoice/${id}/mark-pending`));
         renderPagar(body);
       });
     });
@@ -245,15 +347,16 @@ Pages.payments = async function (root) {
     const rows = await api.get('/api/payments/monthly');
     const total = rows.reduce((s, r) => s + Number(r.total), 0);
     body.innerHTML = `
-      <div class="card">
-        <div class="card-header"><h2>Pagamentos mensais</h2><span class="badge badge-pending tabular">${formatCurrency(total)} pendente</span></div>
+      ${rows.length > 0 ? searchBarHtml('Buscar aluno pelo nome…') + searchEmptyHtml('aluno') : ''}
+      <div class="card pay-group">
+        <div class="card-header"><h2>Pagamentos mensais</h2><span class="badge badge-pending tabular pay-group-total" data-suffix=" pendente">${formatCurrency(total)} pendente</span></div>
         <p class="text-sm muted mt-0">Alunos marcados como <strong>pagamento mensal</strong> no cadastro. Em vez de cobrar aula a aula, é uma cobrança por mês, com o <strong>total de todas as aulas do aluno naquele mês somadas</strong> (o "valor que o aluno paga" de cada aula, definido no agendamento). O mês inteiro conta, inclusive as aulas que ainda vão acontecer; aulas canceladas não entram.
           Enquanto a mensalidade estiver pendente, o total acompanha as aulas (se uma aula for adicionada, editada ou cancelada, ele muda sozinho). Depois de marcada como recebida, o valor recebido fica fixo.</p>
         ${rows.length === 0 ? `<div class="empty-state">Nenhuma mensalidade pendente.</div>` : `
         <div class="table-wrap"><table>
           <thead><tr><th>Aluno</th><th>Mês</th><th>Aulas</th><th class="num">Total do mês</th><th></th></tr></thead>
           <tbody>${rows.map((r, i) => `
-            <tr>
+            <tr class="pay-item" data-search="${escapeHtml(normalizeText(r.student_name))}" data-value="${Number(r.total) || 0}">
               <td><a href="#/alunos/${r.student_id}">${escapeHtml(r.student_name)}</a>
                 <div class="text-sm muted">Aulas em: ${r.dates.join(', ')}</div>
                 ${r.zeroValueCount > 0 ? `<div class="text-sm" style="color:var(--danger);">${pluralPt(r.zeroValueCount, 'aula está com valor R$ 0,00', 'aulas estão com valor R$ 0,00')} — ajuste o valor na agenda, senão a mensalidade sai menor do que deveria.</div>` : ''}</td>
@@ -265,6 +368,8 @@ Pages.payments = async function (root) {
         </table></div>`}
       </div>
     `;
+    makeFilter(body);
+
     body.querySelectorAll('[data-mark]').forEach(btn => {
       btn.addEventListener('click', async () => {
         const r = rows[Number(btn.dataset.mark)];
@@ -276,8 +381,10 @@ Pages.payments = async function (root) {
           );
           if (!ok) return;
         }
+        btn.disabled = true;
         await api.post(`/api/payments/monthly-charge/${r.id}/mark-paid`);
-        showToast('Mensalidade marcada como recebida.');
+        offerUndo('mensais', `Recebido de ${r.student_name}: mensalidade de ${MONTH_NAMES[r.month - 1]}/${r.year} (${formatCurrency(r.total)}).`,
+          () => api.post(`/api/payments/monthly-charge/${r.id}/mark-pending`));
         renderMensais(body);
       });
     });
@@ -312,8 +419,12 @@ Pages.payments = async function (root) {
     `;
     body.querySelectorAll('[data-mark]').forEach(btn => {
       btn.addEventListener('click', async () => {
-        await api.post(`/api/expenses/${btn.dataset.mark}/mark-paid`);
-        showToast('Despesa marcada como paga.');
+        const id = btn.dataset.mark;
+        const r = rows.find(x => String(x.id) === String(id));
+        btn.disabled = true;
+        await api.post(`/api/expenses/${id}/mark-paid`);
+        offerUndo('despesas', `Despesa paga: ${r.description} (${formatCurrency(r.value)}).`,
+          () => api.post(`/api/expenses/${id}/mark-pending`));
         renderDespesas(body);
       });
     });
@@ -498,6 +609,7 @@ Pages.payments = async function (root) {
         summaryHtml = `
           <div class="alert alert-info">
             <strong>Pagamento mensal.</strong> Mensalidade de ${mesNome}: ${formatCurrency(shown)} (${pluralPt(m.classCount, 'aula', 'aulas')}) ${statusBadge}${note}
+            ${c && c.status === 'paid' ? `<div style="margin-top:8px;"><button type="button" class="btn-text text-sm" data-undo-charge="${c.id}">Voltar para pendente</button></div>` : ''}
             ${m.zeroValueCount > 0 ? `<div class="text-sm" style="color:var(--danger); margin-top:6px;">${pluralPt(m.zeroValueCount, 'aula está com valor R$ 0,00', 'aulas estão com valor R$ 0,00')}.</div>` : ''}
           </div>`;
       } else {
@@ -520,18 +632,29 @@ Pages.payments = async function (root) {
           ${summaryHtml}
           ${data.classes.length === 0 ? `<div class="empty-state">Nenhuma aula neste mês.</div>` : `
           <div class="table-wrap"><table>
-            <thead><tr><th>Data</th><th>Disciplina</th><th>Professor</th><th class="num">Valor</th>${m ? '' : '<th>Status</th>'}</tr></thead>
+            <thead><tr><th>Data</th><th>Disciplina</th><th>Professor</th><th class="num">Valor</th>${m ? '' : '<th>Status</th><th></th>'}</tr></thead>
             <tbody>${data.classes.map(c => `
               <tr>
                 <td>${formatDate(c.start_time)}</td>
                 <td>${escapeHtml(c.subject_name)}</td>
                 <td>${escapeHtml(c.teacher_name)}</td>
                 <td class="num tabular">${formatCurrency(c.student_value)}</td>
-                ${m ? '' : `<td>${c.student_paid ? '<span class="badge badge-confirmed">Pago</span>' : '<span class="badge badge-pending">Pendente</span>'}</td>`}
+                ${m ? '' : `<td>${c.student_paid ? '<span class="badge badge-confirmed">Pago</span>' : '<span class="badge badge-pending">Pendente</span>'}</td>
+                <td>${c.student_paid ? `<button type="button" class="btn-text text-sm" data-undo-class="${c.id}">Voltar para pendente</button>` : ''}</td>`}
               </tr>`).join('')}</tbody>
           </table></div>`}
         </div>
       `;
+      detailEl.querySelectorAll('[data-undo-class]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          if (await undoHistoryItem('aula', btn.dataset.undoClass)) renderStudentMonth();
+        });
+      });
+      detailEl.querySelectorAll('[data-undo-charge]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          if (await undoHistoryItem('mensalidade', btn.dataset.undoCharge)) renderStudentMonth();
+        });
+      });
       document.getElementById('hist-prev-month').addEventListener('click', () => {
         viewMonth--; if (viewMonth < 1) { viewMonth = 12; viewYear--; }
         renderStudentMonth();
@@ -543,6 +666,7 @@ Pages.payments = async function (root) {
     }
 
     let generalCategory = 'alunos';
+    let histFilter = null;          // a busca da lista geral (a caixa fica fora da lista, que é redesenhada)
 
     async function renderGeneral() {
       generalEl.innerHTML = `
@@ -554,14 +678,20 @@ Pages.payments = async function (root) {
               <button type="button" data-cat="despesas" class="${generalCategory === 'despesas' ? 'active' : ''}">Pago em despesas</button>
             </div>
           </div>
+          ${searchBarHtml('Buscar por nome (aluno, professor ou despesa)…')}
+          ${searchEmptyHtml('registro', true)}
           <div id="hist-cat-body"><div class="loading-dots">Carregando…</div></div>
         </div>
       `;
+      histFilter = makeFilter(generalEl, '#hist-cat-body .pay-item');
       document.querySelectorAll('#hist-cat-toggle button').forEach(btn => {
         btn.addEventListener('click', () => {
           document.querySelectorAll('#hist-cat-toggle button').forEach(b => b.classList.remove('active'));
           btn.classList.add('active');
           generalCategory = btn.dataset.cat;
+          searchQuery = '';
+          const si = generalEl.querySelector('#pay-search');
+          if (si) si.value = '';
           renderCategoryBody();
         });
       });
@@ -581,6 +711,7 @@ Pages.payments = async function (root) {
 
       if (filtered.length === 0) {
         catBody.innerHTML = `<div class="empty-state">Nada por aqui ainda.</div>`;
+        if (histFilter) histFilter.apply();
         return;
       }
 
@@ -604,13 +735,14 @@ Pages.payments = async function (root) {
         const [y, m] = key.split('-');
         const label = (y && m) ? `${MONTH_NAMES[Number(m) - 1]} de ${y}` : 'Sem data de pagamento';
         return `
+          <div class="pay-group">
           <div class="day-section-title" style="display:flex; justify-content:space-between; align-items:center;">
-            <span>${label}</span><span class="tabular">${formatCurrency(subtotal)}</span>
+            <span>${label}</span><span class="tabular pay-group-total" data-suffix="">${formatCurrency(subtotal)}</span>
           </div>
           <div class="table-wrap"><table>
             <thead><tr><th>${nameLabel}</th><th>${referenceLabel}</th><th class="num">Valor</th><th>Pago/recebido em</th><th></th></tr></thead>
             <tbody>${items.map(r => `
-              <tr>
+              <tr class="pay-item" data-search="${escapeHtml(normalizeText(r.name))}" data-value="${Number(r.value) || 0}">
                 <td>${escapeHtml(r.name)}</td>
                 <td>${escapeHtml(String(r.reference_date || '').slice(0, 10))}</td>
                 <td class="num tabular">${formatCurrency(r.value)}</td>
@@ -621,6 +753,7 @@ Pages.payments = async function (root) {
                 </td>
               </tr>`).join('')}</tbody>
           </table></div>
+          </div>
         `;
       }).join('');
 
@@ -636,6 +769,7 @@ Pages.payments = async function (root) {
           if (deleted) renderCategoryBody();
         });
       });
+      if (histFilter) histFilter.apply();
     }
 
     renderGeneral();

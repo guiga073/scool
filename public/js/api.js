@@ -114,21 +114,48 @@ const MONTH_NAMES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
 
 // ---------- Toast (mensagens rápidas) ----------
 
-let toastTimer = null;
-function showToast(message, kind) {
-  let el = document.getElementById('toast');
-  if (!el) {
-    el = document.createElement('div');
-    el.id = 'toast';
-    el.style.cssText = 'position:fixed;bottom:22px;left:50%;transform:translateX(-50%);z-index:200;padding:12px 20px;border-radius:10px;font-size:13.5px;font-weight:600;box-shadow:0 8px 30px rgba(0,0,0,0.2);max-width:90vw;text-align:center;';
-    document.body.appendChild(el);
+// Mensagens rápidas no pé da tela. Ficam empilhadas (até 4 ao mesmo tempo) e podem ter um botão de
+// ação, como o "Desfazer" que aparece depois de marcar algo como pago.
+//   showToast('Salvo.')                                  -> some em ~3 s
+//   showToast('Algo deu errado.', 'error')               -> vermelha
+//   showToast('Marcado.', null, { actionLabel: 'Desfazer', onAction: async () => { ... } })
+//                                                        -> fica 12 s, para dar tempo de clicar
+function showToast(message, kind, options) {
+  if (kind && typeof kind === 'object') { options = kind; kind = undefined; }
+  options = options || {};
+  let stack = document.getElementById('toast-stack');
+  if (!stack) {
+    stack = document.createElement('div');
+    stack.id = 'toast-stack';
+    stack.className = 'toast-stack';
+    stack.setAttribute('role', 'status');
+    stack.setAttribute('aria-live', 'polite');
+    document.body.appendChild(stack);
   }
-  el.style.background = kind === 'error' ? '#B84C3E' : '#1F4A42';
-  el.style.color = '#fff';
-  el.textContent = message;
-  el.style.display = 'block';
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { el.style.display = 'none'; }, 3200);
+  const el = document.createElement('div');
+  el.className = 'toast' + (kind === 'error' ? ' toast-error' : '');
+  const text = document.createElement('span');
+  text.className = 'toast-text';
+  text.textContent = message;
+  el.appendChild(text);
+  let timer = null;
+  const dismiss = () => { clearTimeout(timer); el.remove(); };
+  if (options.actionLabel && typeof options.onAction === 'function') {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'toast-action';
+    btn.textContent = options.actionLabel;
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      dismiss();
+      try { await options.onAction(); } catch (err) { showToast((err && err.message) || 'Não foi possível concluir.', 'error'); }
+    });
+    el.appendChild(btn);
+  }
+  stack.appendChild(el);
+  while (stack.children.length > 4) stack.removeChild(stack.firstChild);
+  timer = setTimeout(dismiss, options.duration || (options.actionLabel ? 12000 : 3200));
+  return { dismiss };
 }
 
 // ---------- Modal genérico ----------
