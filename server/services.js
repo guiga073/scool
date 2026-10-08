@@ -507,12 +507,26 @@ function monthFinancials(db, ref) {
   };
 }
 
-// Série dos últimos N meses (incluindo o atual).
-function monthlyFinancialSeries(db, monthsBack) {
+// Série dos últimos N meses terminando em `endRef` (padrão: o mês atual).
+// Mês que ainda não chegou não tem nada pago/recebido (o regime de caixa conta a data do pagamento),
+// então para ele a série traz a PREVISÃO pela agenda (monthForecast), marcada com projected: true.
+function monthlyFinancialSeries(db, monthsBack, endRef) {
   const now = new Date();
+  const end = endRef || now;
+  const nowIdx = now.getFullYear() * 12 + now.getMonth();
   const out = [];
   for (let i = monthsBack - 1; i >= 0; i--) {
-    out.push(monthFinancials(db, new Date(now.getFullYear(), now.getMonth() - i, 1)));
+    const ref = new Date(end.getFullYear(), end.getMonth() - i, 1);
+    const idx = ref.getFullYear() * 12 + ref.getMonth();
+    if (idx > nowIdx) {
+      const f = monthForecast(db, ref, now);
+      out.push({
+        year: f.year, month: f.month, revenue: f.revenue, teacherCosts: f.teacherCosts, expenseCosts: f.expenseCosts,
+        totalCosts: f.totalCosts, profit: f.profit, projected: true, isCurrent: false,
+      });
+    } else {
+      out.push({ ...monthFinancials(db, ref), projected: false, isCurrent: idx === nowIdx });
+    }
   }
   return out;
 }
@@ -548,11 +562,25 @@ function monthForecast(db, ref, now) {
     WHERE classes.status = 'scheduled' AND classes.start_time LIKE ?
   `).get(nowStr, like);
 
-  const expenseCosts = db.prepare(`
+  const existingExpenses = db.prepare(`
     SELECT COALESCE(SUM(value), 0) AS total FROM expenses
     WHERE COALESCE(due_date, substr(created_at, 1, 10)) LIKE ?
        OR (status = 'paid' AND paid_at LIKE ?)
   `).get(like, like).total;
+
+  // Despesas recorrentes só ganham uma despesa "de verdade" no mês atual (ver ensureRecurringExpensesGenerated).
+  // Para um mês que ainda não chegou, o gabarito ativo é o que se espera pagar: sem isso a previsão
+  // deixaria de fora as contas fixas e o lucro previsto sairia maior do que será.
+  const nowIdx = now.getFullYear() * 12 + now.getMonth();
+  const refIdx = year * 12 + month;
+  const isFuture = refIdx > nowIdx;
+  const recurringProjected = !isFuture ? 0 : db.prepare(`
+    SELECT COALESCE(SUM(value), 0) AS total FROM recurring_expenses
+    WHERE active = 1 AND NOT EXISTS (
+      SELECT 1 FROM expenses e WHERE e.recurring_expense_id = recurring_expenses.id AND e.due_date LIKE ?
+    )
+  `).get(like).total;
+  const expenseCosts = existingExpenses + recurringProjected;
 
   const revenue = round2(cls.class_revenue + cls.monthly_revenue);
   const teacherCosts = round2(cls.teacher_costs);
@@ -560,6 +588,8 @@ function monthForecast(db, ref, now) {
   const profit = round2(revenue - totalCosts);
   return {
     year, month: month + 1,
+    isCurrent: refIdx === nowIdx, isPast: refIdx < nowIdx, isFuture,
+    recurringExpenseProjected: round2(recurringProjected),
     classCount: cls.total, doneCount: cls.done, upcomingCount: cls.total - cls.done,
     revenue, classRevenue: round2(cls.class_revenue), monthlyRevenue: round2(cls.monthly_revenue),
     // aulas de alunos mensalistas sem valor definido — deixam a mensalidade (e a previsão) menor do que deveria
@@ -571,11 +601,30 @@ function monthForecast(db, ref, now) {
 
 // Para um mês específico: faturamento por disciplina e custo por professor — mesmo
 // regime de caixa de monthFinancials, pelas mesmas datas de pagamento/recebimento.
-function monthBreakdown(db, ref) {
+function monthBreakdown(db, ref, now) {
+  now = now || new Date();
   const pad = (n) => String(n).padStart(2, '0');
   const year = ref.getFullYear();
   const month = ref.getMonth();
   const like = `${year}-${pad(month + 1)}-%`;
+
+  // Mês que ainda não chegou: nada foi pago/recebido, então mostra o previsto pela agenda
+  // (valor das aulas por disciplina; aula + transporte por professor).
+  if (year * 12 + month > now.getFullYear() * 12 + now.getMonth()) {
+    const projBySubject = db.prepare(`
+      SELECT subjects.name AS label, COALESCE(SUM(classes.student_value), 0) AS value
+      FROM classes JOIN subjects ON subjects.id = classes.subject_id
+      WHERE classes.status = 'scheduled' AND classes.start_time LIKE ?
+      GROUP BY subjects.id HAVING value > 0 ORDER BY value DESC LIMIT 8
+    `).all(like).map(r => ({ label: r.label, value: round2(r.value) }));
+    const projByTeacher = db.prepare(`
+      SELECT teachers.name AS label, COALESCE(SUM(classes.teacher_value + classes.transport_value), 0) AS value
+      FROM classes JOIN teachers ON teachers.id = classes.teacher_id
+      WHERE classes.status = 'scheduled' AND classes.start_time LIKE ?
+      GROUP BY teachers.id HAVING value > 0 ORDER BY value DESC LIMIT 8
+    `).all(like).map(r => ({ label: r.label, value: round2(r.value) }));
+    return { bySubject: projBySubject, byTeacher: projByTeacher, projected: true };
+  }
 
   const bySubject = db.prepare(`
     SELECT subjects.name AS label, COALESCE(SUM(classes.student_value), 0) AS value
@@ -593,7 +642,7 @@ function monthBreakdown(db, ref) {
     GROUP BY teachers.id HAVING value > 0 ORDER BY value DESC LIMIT 8
   `).all(like).map(r => ({ label: r.label, value: round2(r.value) }));
 
-  return { bySubject, byTeacher };
+  return { bySubject, byTeacher, projected: false };
 }
 
 module.exports = {

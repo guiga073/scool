@@ -3,7 +3,7 @@
 //
 // Por que isso importa: um link salvo como "meet.google.com/abc-defg-hij" (sem https://)
 // é entendido pelo navegador como um endereço DENTRO do próprio portal; então o botão
-// "Abrir link" leva a uma página que não existe, em vez de abrir o Meet.
+// o link da aula leva a uma página que não existe, em vez de abrir o Meet.
 //
 // Regras (a mesma lógica existe no navegador, em public/js/api.js, para avisar na hora):
 //   vazio                          -> tudo bem: aula sem link

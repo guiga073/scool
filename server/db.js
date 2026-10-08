@@ -190,7 +190,7 @@ ensureColumn('classes', 'transport_value', 'REAL DEFAULT 0');
 ensureColumn('expenses', 'recurring_expense_id', 'INTEGER REFERENCES recurring_expenses(id)');
 
 // Links de aula antigos: antes o link era salvo exatamente como digitado, e um link sem
-// "https://" (ex.: "meet.google.com/abc") não abre pelo botão "Abrir link" — o navegador
+// "https://" (ex.: "meet.google.com/abc") não abre pelo link da aula — o navegador
 // o entende como um endereço dentro do próprio portal. Aqui eles são corrigidos de forma
 // segura: só completa o "https://" (nunca apaga nem troca o link). Roda a cada início do
 // servidor, mas só mexe no que ainda estiver sem https.

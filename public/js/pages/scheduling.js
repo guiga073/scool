@@ -327,8 +327,9 @@ async function openClassDetailModal(cls, onChanged) {
       <div><div class="text-sm muted">Modalidade</div><p>${cls.modality === 'online' ? 'Online' : 'Presencial'}</p></div>
       ${cls.modality === 'presencial'
         ? `<div><div class="text-sm muted">Endereço</div><p>${cls.student_address ? escapeHtml(cls.student_address) : '<span class="muted">Aluno sem endereço cadastrado</span>'}</p></div>`
-        : `<div><div class="text-sm muted">Link</div><p>${meetingLinkHtml(cls.meeting_link)}</p></div>`}
+        : ''}
     </div>
+    ${cls.modality === 'online' ? `<div><div class="text-sm muted">Link</div><p>${meetingLinkHtml(cls.meeting_link)}</p></div>` : ''}
     <div class="field-row">
       <div><div class="text-sm muted">Aluno paga</div><p class="tabular">${formatCurrency(cls.student_value)} ${cls.student_paid ? '<span class="badge badge-confirmed">Recebido</span>' : '<span class="badge badge-pending">Pendente</span>'}</p></div>
       <div><div class="text-sm muted">Professor recebe</div><p class="tabular">${formatCurrency(cls.teacher_value)}${cls.modality === 'presencial' && Number(cls.transport_value) > 0 ? ` + ${formatCurrency(cls.transport_value)} transporte` : ''}</p></div>

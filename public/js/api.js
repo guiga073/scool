@@ -35,7 +35,7 @@ function escapeHtml(str) {
 // Mesma regra do servidor (server/links.js): o link sempre termina como "https://...".
 // Sem esquema ("meet.google.com/abc") ganha https://; "http://" vira "https://"; qualquer outro
 // tipo de endereço (javascript:, ftp:...) é recusado. Sem isso, o navegador entende um link sem
-// https:// como um endereço DENTRO do portal, e o botão "Abrir link" não abre a aula.
+// https:// como um endereço DENTRO do portal, e o link da aula não abre o Meet.
 // Retorna { ok: true, value, changed } ou { ok: false, error }.
 function normalizeMeetingLink(input) {
   if (input === undefined || input === null) return { ok: true, value: null, changed: false };
@@ -64,13 +64,20 @@ function normalizeMeetingLink(input) {
   return { ok: true, value: candidate, changed: candidate !== raw };
 }
 
-// HTML do "Abrir link" (usado nas telas do admin, do professor e do aluno). Normaliza na hora de
-// exibir, então até um link antigo salvo sem https:// abre direito.
+// Escapa o texto e deixa o navegador quebrar a linha DEPOIS de / ? & = # (em vez de no meio de uma palavra),
+// para um endereço comprido ficar legível em telas estreitas. O texto copiado continua sendo o endereço exato.
+function breakableText(text) {
+  return String(text).split(/([\/?&=#])/).map((part) => escapeHtml(part) + (/^[\/?&=#]$/.test(part) ? '<wbr>' : '')).join('');
+}
+
+// HTML do link da aula (usado nas telas do admin, do professor e do aluno): o próprio endereço, escrito por
+// extenso e clicável (abre em outra aba). Normaliza na hora de exibir, então até um link antigo salvo sem
+// https:// aparece e abre direito.
 function meetingLinkHtml(link) {
   if (link === null || link === undefined || String(link).trim() === '') return '—';
   const r = normalizeMeetingLink(link);
   if (!r.ok) return `<span class="muted" title="${escapeHtml(String(link))}">Link inválido</span>`;
-  return `<a href="${escapeHtml(r.value)}" target="_blank" rel="noopener noreferrer">Abrir link</a>`;
+  return `<a class="meeting-link" href="${escapeHtml(r.value)}" target="_blank" rel="noopener noreferrer" title="Abrir em uma nova aba">${breakableText(r.value)}</a>`;
 }
 
 function formatCurrency(value) {

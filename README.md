@@ -286,8 +286,8 @@ possível por um terminal (Shell) no painel da Railway, substituindo o arquivo
   já indicando qual professor escreveu) e "Por professor" (busca um professor e vê o
   feedback que ele deu para todos os alunos dele). Tem o mesmo botão "Ver como texto" e
   a opção de excluir um item, se precisar.
-- **Financeiro** — visão geral do negócio: receita, custos e lucro do mês atual, um
-  gráfico comparando os últimos 6 ou 12 meses, e dois rankings do mês — faturamento por
+- **Financeiro** — visão geral do negócio: receita, custos e lucro do mês escolhido, um
+  gráfico comparando 6 ou 12 meses, e dois rankings do mês — faturamento por
   disciplina e custo por professor, para ver o que está puxando o resultado. **Tudo
   aqui é por regime de caixa**: cada valor conta no mês em que o dinheiro de fato
   **entrou ou saiu** (a data em que foi marcado como pago/recebido), não no mês da aula
@@ -298,6 +298,19 @@ possível por um terminal (Shell) no painel da Railway, substituindo o arquivo
   professor em aberto, despesas a vencer) não entra no Financeiro — isso já é coberto
   pela aba Pagamentos, que é sobre o que falta receber/pagar, não sobre o que já
   aconteceu de fato.
+
+  **Escolher o mês (passado ou futuro)**: no topo da tela há um seletor com as setas ← e →, os campos de
+  mês e ano (de 5 anos atrás até 3 anos à frente) e o botão **Mês atual**; um selo diz se o mês visto é atual,
+  passado ou futuro. Tudo na tela acompanha o mês escolhido, e ele fica guardado enquanto o painel estiver
+  aberto (sair para Pagamentos e voltar mantém o mesmo mês). Em um **mês passado**, os cartões mostram o que
+  foi de fato pago/recebido naquele mês, e o card ao lado vira "Agenda de [mês]" (o que estava agendado, tenha
+  sido pago ou não, para comparar). Em um **mês futuro** nada foi pago ainda, então o bloco de realizado vira um
+  aviso e a tela mostra a **Previsão** pela agenda, **inclusive as despesas recorrentes** (as contas fixas só
+  ganham uma despesa de verdade quando o mês chega, então para o futuro entram como previstas, sem contar em
+  dobro quando a despesa daquele mês já existir) e o detalhamento **previsto** por disciplina e por professor.
+  O gráfico destaca o mês escolhido, os meses futuros aparecem como barras **tracejadas** (previsão) e dá para
+  **clicar em um mês do gráfico** para ir até ele. As rotas `GET /api/finance/forecast`, `/breakdown` aceitam
+  `?year=AAAA&month=M` e `/monthly` aceita `?end=AAAA-MM` (sem eles, o mês atual, como antes).
 
   **Previsão do mês**: logo abaixo dos números realizados, o card "Previsão de
   [nome do mês]" projeta como o mês em andamento deve fechar **se tudo que está agendado
@@ -332,6 +345,9 @@ possível por um terminal (Shell) no painel da Railway, substituindo o arquivo
   exemplo `javascript:...`, com espaços ou sem domínio), ele avisa o motivo e não salva. Isso vale para aula
   avulsa, recorrente e edição. Aulas antigas salvas sem `https://` são corrigidas automaticamente na
   primeira vez que o servidor reinicia (aparece no log: "Links de aula corrigidos para https://").
+  Na ficha da aula (Agendamento, portal do professor e portal do aluno), o link aparece **escrito por extenso**:
+  o próprio endereço, clicável, que abre em outra aba. Endereços compridos (Zoom, Teams) quebram a linha em
+  pontos naturais (depois de `/`, `?`, `&`, `=`) em vez de estourar a caixa.
 - **Pagamentos** — cinco abas: "Pagamentos avulsos", "Pagamentos mensais", "A pagar
   (professores)", "Despesas" e "Histórico". Nada pendente desaparece sozinho — só some
   da lista de pendentes quando você marca como recebido/pago.

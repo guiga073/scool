@@ -575,6 +575,21 @@ table.avail-grid td.avail-on:hover { background: var(--primary-soft); }
 .search-clear:hover { background: var(--primary-tint); color: var(--ink); }
 .search-count { font-size: 12.5px; color: var(--ink-soft); }
 
+/* Link da aula escrito por extenso: se for comprido, quebra a linha em vez de estourar a caixa. */
+.meeting-link { overflow-wrap: anywhere; word-break: break-word; }
+
+/* ---------- Financeiro: seletor de mês e gráfico clicável ---------- */
+.fin-month-bar { margin-bottom: 18px; }
+.fin-select { width: auto; min-width: 0; padding: 7px 10px; font-weight: 600; cursor: pointer; }
+#fin-month { min-width: 128px; }
+.fin-slot { fill: transparent; cursor: pointer; outline: none; }
+.fin-slot:hover { fill: rgba(20, 20, 20, 0.04); }
+.fin-slot:focus-visible { stroke: var(--primary); stroke-width: 2; }
+@media (max-width: 600px) {
+  .fin-month-bar .calendar-nav { width: 100%; }
+  .fin-month-bar .fin-select { flex: 1 1 0; min-width: 0; }
+}
+
 /* ---------- Responsivo ---------- */
 
 @media (max-width: 900px) {
