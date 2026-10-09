@@ -456,6 +456,9 @@ td.num, th.num { text-align: right; }
 }
 .month-cell .chip.conflict { background: var(--danger-tint); color: var(--danger); }
 .month-cell .more { font-size: 10.5px; color: var(--ink-faint); }
+/* Contador de aulas do dia e legenda: só aparecem em tela estreita (até 900px), onde os chips ficam escondidos. */
+.month-cell .day-count { display: none; }
+.month-hint { display: none; margin: 12px 2px 0; font-size: 12.5px; line-height: 1.45; color: var(--ink-soft); }
 
 .week-grid, .day-grid { display: flex; flex-direction: column; gap: 8px; }
 .time-slot-list .slot {
@@ -603,8 +606,26 @@ table.avail-grid td.avail-on:hover { background: var(--primary-soft); }
   .stat-grid { grid-template-columns: repeat(2, 1fr); }
   .month-grid { gap: 4px; }
   .month-cell { min-height: 64px; padding: 4px; }
-  .month-cell .chip { display: none; }
-  .month-cell .more { display: block; }
+  /* Sem espaço para os chips: cada dia com aula mostra uma "bolinha" com o total de aulas do dia
+     (o "+N mais" só existia para dias com mais de 3 aulas e deixava os demais em branco). */
+  .month-cell .chip, .month-cell .more { display: none; }
+  .month-cell .day-count {
+    display: block; align-self: center; max-width: 100%; min-width: 20px; height: 20px; margin-top: 2px; padding: 0 4px;
+    border-radius: 999px; background: var(--accent); color: var(--primary);
+    font-size: 11px; font-weight: 700; line-height: 20px; text-align: center; font-variant-numeric: tabular-nums;
+    white-space: nowrap; overflow: hidden;
+  }
+  .month-hint { display: block; }
+}
+
+/* Telas médias (tablet): sobra espaço, então a bolinha diz "3 aulas"; no celular só o número. */
+@media (max-width: 600px) {
+  .month-cell .day-count-word { display: none; }
+}
+
+/* Celulares bem estreitos (320 px): a casa do dia tem ~23 px de largura útil; folga para números de 2 dígitos. */
+@media (max-width: 340px) {
+  .month-cell .day-count { padding: 0 3px; font-size: 10.5px; }
 }
 
 @media (max-width: 560px) {

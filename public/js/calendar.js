@@ -114,19 +114,31 @@ const Calendar = {
       const today = new Date();
       days.forEach(day => {
         const dayClasses = classes.filter(c => CalendarMath.sameDay(parseDbDate(c.start_time), day));
+        const total = dayClasses.length;
         const cell = document.createElement('div');
-        cell.className = 'month-cell' + (day.getMonth() !== refDate.getMonth() ? ' out' : '') + (CalendarMath.sameDay(day, today) ? ' today' : '');
+        cell.className = 'month-cell' + (day.getMonth() !== refDate.getMonth() ? ' out' : '') + (CalendarMath.sameDay(day, today) ? ' today' : '') + (total > 0 ? ' has-classes' : '');
         const shown = dayClasses.slice(0, 3);
+        const aulas = total === 1 ? 'aula' : 'aulas';
         cell.innerHTML = `<span class="day-num">${day.getDate()}</span>` +
           shown.map(c => `<span class="chip">${formatTime(c.start_time)} ${escapeHtml(CalendarMath.firstName(c.student_name))}</span>`).join('') +
-          (dayClasses.length > 3 ? `<span class="more">+${dayClasses.length - 3} mais</span>` : '');
+          (total > 3 ? `<span class="more">+${total - 3} mais</span>` : '') +
+          // Contador do dia: nas telas estreitas (celular) os "chips" acima ficam escondidos, então é ele que
+          // mostra, em TODO dia com aula, quantas aulas existem. No computador fica escondido (ver o CSS).
+          (total > 0 ? `<span class="day-count" role="img" aria-label="${total} ${aulas}"><span class="day-count-n">${total}</span><span class="day-count-word"> ${aulas}</span></span>` : '');
         cell.addEventListener('click', (e) => {
-          if (dayClasses.length === 0) { if (onCreateAt) onCreateAt(day); return; }
+          if (total === 0) { if (onCreateAt) onCreateAt(day); return; }
           Calendar._openDayList(day, dayClasses, onSelectClass, onCreateAt);
         });
         grid.appendChild(cell);
       });
       body.appendChild(grid);
+      if (classes.length > 0) {
+        // Legenda: só aparece nas telas estreitas (ver o CSS), onde o dia mostra só o número de aulas.
+        const hint = document.createElement('p');
+        hint.className = 'month-hint';
+        hint.textContent = 'O número em cada dia é a quantidade de aulas. Toque no dia para ver os detalhes.';
+        body.appendChild(hint);
+      }
     } else if (view === 'week' || view === 'day') {
       const days = view === 'week' ? CalendarMath.weekDays(refDate) : [refDate];
       days.forEach(day => {

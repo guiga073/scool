@@ -421,6 +421,20 @@ cadastrar o sistema como aplicativo no Google (OAuth, chaves de API, tela de per
 campo. Se no futuro fizer sentido automatizar isso, dá para adicionar depois sem mudar
 o resto do sistema.
 
+### Calendário no celular (visão "Mês")
+
+O calendário é o mesmo em todo lugar: **Agendamento**, ficha do **aluno** e do **professor**
+(aba "Calendário de aulas") e as áreas do aluno e do professor. Ele se adapta ao tamanho da tela:
+
+- **No computador** (tela larga), cada dia mostra até 3 aulas escritas (horário e nome do aluno)
+  e, se houver mais, um "+N mais".
+- **No celular e no tablet** (tela de até 900 px) não há espaço para escrever as aulas dentro de
+  cada quadradinho. Por isso **todo dia que tem aula mostra uma bolinha amarela com a
+  quantidade de aulas** daquele dia (no tablet ela diz "3 aulas"; no celular, só o "3").
+  Dia sem aula fica sem bolinha. Toque no dia para ver a lista e, nela, em uma aula para ver
+  os detalhes. Tocar num dia **sem** aula abre o agendamento de uma nova aula (só no painel
+  de administração; nas áreas do aluno e do professor não acontece nada).
+
 ---
 
 ## 6. Solução de problemas
