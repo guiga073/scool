@@ -34,6 +34,7 @@ function renderShell() {
     <div class="tabs">
       <button class="tab-btn active" data-tab="ganhos">Meus ganhos</button>
       <button class="tab-btn" data-tab="alunos">Alunos</button>
+      <button class="tab-btn" data-tab="materiais">Materiais</button>
       <button class="tab-btn" data-tab="aulas">Minhas aulas</button>
       <button class="tab-btn" data-tab="disponibilidade">Minha disponibilidade</button>
     </div>
@@ -52,6 +53,7 @@ function renderShell() {
     const el = document.getElementById('tab-content');
     if (activeTab === 'ganhos') renderGanhos(el);
     else if (activeTab === 'alunos') renderAlunos(el);
+    else if (activeTab === 'materiais') renderMateriais(el);
     else if (activeTab === 'aulas') renderAulas(el);
     else if (activeTab === 'disponibilidade') renderDisponibilidade(el);
   }
@@ -70,6 +72,16 @@ async function renderAlunos(el) {
     students,
     (studentId) => `/api/teacher-portal/students/${studentId}`
   );
+}
+
+// Materiais de aula: primeiro a lista de alunos; clicar abre os materiais daquele aluno (e o envio).
+function renderMateriais(el) {
+  el.innerHTML = `<div class="card"><div id="prof-materials"></div></div>`;
+  const host = document.getElementById('prof-materials');
+  const showStudents = () => MaterialsPanel.renderStudentPicker(host, (student) => {
+    MaterialsPanel.mount(host, { viewer: 'teacher', studentId: student.id, studentName: student.name, title: `Materiais — ${student.name}`, onBack: showStudents });
+  });
+  showStudents();
 }
 
 async function renderGanhos(el) {

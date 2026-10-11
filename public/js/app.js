@@ -29,6 +29,7 @@ async function router() {
     else if (page === 'professores' && !id) await Pages.teachersList(root);
     else if (page === 'professores' && id) await Pages.teacherDetail(root, id);
     else if (page === 'feedbacks') await Pages.feedbacks(root);
+    else if (page === 'materiais') await Pages.materials(root);
     else if (page === 'financeiro') await Pages.finance(root);
     else if (page === 'agendamento') await Pages.scheduling(root);
     else if (page === 'pagamentos') await Pages.payments(root);

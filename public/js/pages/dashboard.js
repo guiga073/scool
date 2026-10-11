@@ -31,6 +31,8 @@ Pages.dashboard = async function (root) {
       </div>
     </div>
 
+    <div id="materials-space-alert"></div>
+
     <div class="stat-grid">
       <div class="stat-card"><div class="stat-label">Alunos ativos</div><div class="stat-value">${students.length}</div></div>
       <div class="stat-card"><div class="stat-label">Professores ativos</div><div class="stat-value">${teachers.length}</div></div>
@@ -63,4 +65,16 @@ Pages.dashboard = async function (root) {
       </div>
     </div>
   `;
+
+  // Aviso quando o espaço dos materiais está acabando. Não atrapalha o painel se der qualquer erro.
+  api.get('/api/admin/materials?limit=1').then(({ usage }) => {
+    const pct = usage.capBytes ? (usage.usedBytes / usage.capBytes) * 100 : 0;
+    const slot = document.getElementById('materials-space-alert');
+    if (!slot || pct < 80) return;
+    slot.innerHTML = `
+      <div class="alert ${pct >= 95 ? 'alert-danger' : 'alert-warn'}">
+        <div>O espaço de <strong>materiais</strong> está em ${Math.round(pct)}% (${escapeHtml(formatBytes(usage.usedBytes))} de ${escapeHtml(formatBytes(usage.capBytes))}).
+        Quando encher, ninguém consegue enviar novos arquivos. <a href="#/materiais">Ver materiais</a></div>
+      </div>`;
+  }).catch(() => {});
 };

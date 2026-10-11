@@ -1,8 +1,9 @@
 # Olimais — Sistema de Gestão
 
 Sistema interno de gestão para o seu reforço escolar: cadastro de alunos e professores,
-agendamento de aulas com calendário, e controle de pagamentos (a receber dos alunos e a
-pagar aos professores, quinzenalmente).
+agendamento de aulas com calendário, materiais de aula compartilhados entre professores
+e alunos, e controle de pagamentos (a receber dos alunos e a pagar aos professores,
+quinzenalmente).
 
 Este documento explica como testar o sistema no seu computador e, principalmente,
 **como colocá-lo no ar** para você e sua equipe usarem de verdade.
@@ -88,6 +89,10 @@ importante e mais fácil de esquecer.
 2. Crie um volume e monte-o no caminho `/data` (o mesmo valor que você colocou em
    `DATA_DIR`).
 3. A Railway reinicia o serviço automaticamente depois de anexar o volume.
+
+O volume guarda **o banco de dados e também os arquivos dos Materiais de aula** (veja a
+seção 6). No plano Hobby o volume vai até **5 GB**; o teto que o portal usa para os
+materiais é **4,5 GB**, o que deixa folga para o banco de dados.
 
 **Como isso se comporta quando você dá um novo `git push`:** o Volume é um disco à
 parte, ligado ao *serviço*, não a uma versão específica do código. Quando você sobe um
@@ -195,6 +200,11 @@ melhor do que depender só do backup automático de um provedor: se algum dia ho
 problema com a própria Railway (conta, cobrança, bug da plataforma), você ainda tem os
 dados em mãos, independente dela.
 
+**Atenção — os arquivos dos Materiais não entram em nenhum desses dois backups.** O botão
+"Baixar backup dos dados" salva só o banco (que inclui a *lista* de materiais, mas não os
+arquivos em si), e o backup de volume da Railway não existe no plano Hobby. O que fazer a
+respeito está na seção 6, em "Backup dos arquivos".
+
 **Minha recomendação prática**: uma vez por semana (ou depois de um dia de muito
 cadastro novo), clique em "Baixar backup dos dados" e salve o arquivo num lugar
 seguro — Google Drive, e-mail para você mesmo, um pendrive, tanto faz. Se um dia
@@ -217,10 +227,12 @@ possível por um terminal (Shell) no painel da Railway, substituindo o arquivo
   agendamento). Assim como o professor, cada aluno
   também pode ter um **login próprio** (e-mail + senha, preenchidos por você no
   cadastro): com ele, o aluno entra pelo mesmo endereço do site e cai numa área só dele
-  (`/aluno.html`), com duas abas — "Minhas aulas" (a própria agenda: dia, horário,
-  disciplina, professor, e o link quando a aula é online) e "Feedbacks" (tudo que os
-  professores já escreveram sobre ele, de forma só de leitura — quem escreve é sempre
-  o professor). Na ficha do aluno: dados, calendário de aulas, notas e observações.
+  (`/aluno.html`), com três abas — "Minhas aulas" (a própria agenda: dia, horário,
+  disciplina, professor, e o link quando a aula é online), "Materiais" (os arquivos e links
+  que os professores compartilharam com ele, e onde ele também pode enviar — veja a seção
+  6) e "Feedbacks" (tudo que os professores já escreveram sobre ele, de forma só de
+  leitura — quem escreve é sempre o professor). Na ficha do aluno: dados, calendário de
+  aulas, notas, observações e materiais.
 
   **Gerar login para todos os alunos de uma vez**: na lista de Alunos, o botão
   **"Gerar usuários e senhas para todos"** cria, para cada aluno cadastrado, um usuário
@@ -254,7 +266,8 @@ possível por um terminal (Shell) no painel da Railway, substituindo o arquivo
   com ele, o professor entra pelo mesmo endereço do site e cai numa área só dele
   (`/professor.html`), onde vê o valor a receber na quinzena atual (que atualiza sozinho
   conforme você agenda aulas para ele), o histórico de faturas, as próprias aulas
-  marcadas, preenche a própria disponibilidade, e registra **feedback de aula** para
+  marcadas, preenche a própria disponibilidade, compartilha **materiais** de aula com cada aluno
+  dele (aba "Materiais") e registra **feedback de aula** para
   cada aluno que ele dá aula (aba "Alunos" → escolhe o aluno → "Adicionar feedback",
   preenchendo data e o texto). Um botão "Ver como texto" reúne todo o histórico de
   feedback daquele aluno num bloco de texto simples (Data / Feedback, um embaixo do
@@ -286,6 +299,12 @@ possível por um terminal (Shell) no painel da Railway, substituindo o arquivo
   já indicando qual professor escreveu) e "Por professor" (busca um professor e vê o
   feedback que ele deu para todos os alunos dele). Tem o mesmo botão "Ver como texto" e
   a opção de excluir um item, se precisar.
+- **Materiais** — página própria no menu, onde você vê tudo que professores e alunos
+  compartilharam (listas de exercícios, fotos de caderno, slides, links de vídeo), quanto do
+  espaço já foi usado, e apaga o que não for mais necessário. Também tem a chave que liga
+  ou desliga o envio pelos alunos. Os professores enviam pela área deles (aba "Materiais" →
+  escolhe o aluno) e os alunos pela área deles. Limites, tipos aceitos, permissões e
+  backup: seção 6.
 - **Financeiro** — visão geral do negócio: receita, custos e lucro do mês escolhido, um
   gráfico comparando 6 ou 12 meses, e dois rankings do mês — faturamento por
   disciplina e custo por professor, para ver o que está puxando o resultado. **Tudo
@@ -437,7 +456,138 @@ O calendário é o mesmo em todo lugar: **Agendamento**, ficha do **aluno** e do
 
 ---
 
-## 6. Solução de problemas
+## 6. Materiais de aula — como funciona, limites e como ajustar
+
+**O que é.** Um lugar para professores e alunos compartilharem o que se usa nas aulas: listas
+de exercícios, foto do caderno, slides, planilhas, links de vídeo. Aparece como aba
+**Materiais** na área do professor, na área do aluno e na ficha do aluno (secretaria), e como
+página **Materiais** no menu da secretaria (visão geral e espaço usado).
+
+### Quem faz o quê
+
+| | Vê | Envia | Apaga |
+|---|---|---|---|
+| **Professor** | os materiais dos **seus** alunos (quem tem aula agendada com ele) | para os seus alunos | qualquer material dos seus alunos |
+| **Aluno** | tudo que é dele, de todos os professores | para os professores dele (se a secretaria deixar) | só o que ele mesmo enviou |
+| **Secretaria** | tudo | — (só vê e apaga) | qualquer material; ou todos de um aluno de uma vez |
+
+Os materiais pertencem ao **par aluno–professor**: o que o professor Marcos envia para a
+Carolina só aparece para a Carolina, para o Marcos e para a secretaria — nunca para outro
+aluno ou outro professor. O par existe enquanto houver ao menos **uma aula agendada** entre
+os dois (aula cancelada não conta). Se um professor deixar de ter aulas agendadas com um
+aluno, ele deixa de ver os materiais desse aluno; o aluno continua vendo os dele. Quem a
+pessoa é vem sempre do login, nunca de algo que o navegador informe.
+
+### Limites
+
+- **50 MB por arquivo** e **4,5 GB no total** (todos os arquivos somados).
+- O portal também recusa novos envios quando o volume está com menos de **200 MB livres**: o
+  banco de dados mora no mesmo volume e nunca pode ficar sem espaço.
+- Passou de 80% do teto: aparece um aviso no Painel inicial, e a barra da página Materiais
+  muda de cor (amarela até 95%, vermelha depois).
+- Para mudar, defina variáveis de ambiente no serviço (Railway → Variables), em MB
+  (1 MB = 1.000.000 bytes): `MATERIALS_MAX_FILE_MB` (padrão 50), `MATERIALS_MAX_TOTAL_MB`
+  (padrão 4500) e `MATERIALS_MIN_FREE_MB` (padrão 200; `0` desliga a proteção). Depois de
+  salvar a variável, aplique a mudança na Railway (o botão **Deploy** que ela mostra) para o
+  serviço reiniciar com o valor novo. Aumentar o teto só adianta se o volume tiver espaço de
+  verdade (veja "Quando o espaço acabar").
+- **Envio pelo celular ou internet lenta:** a Railway interrompe qualquer envio que demore
+  mais de **5 minutos**. Um arquivo de 50 MB precisa de pelo menos ~1,4 Mbps de envio
+  contínuo. Se a internet cair, a tela mostra "Tentar de novo". Para arquivos grandes ou
+  conexão ruim, o caminho é o **link** (YouTube, Google Drive…).
+
+### Tipos de arquivo
+
+- **Aceitos:** PDF, imagens (JPG, PNG, GIF, WEBP), Word (.docx), PowerPoint (.pptx) e Excel
+  (.xlsx). O portal confere o **conteúdo** do arquivo, não só o nome: um programa renomeado
+  para `.pdf` é recusado.
+- **Recusados de propósito:** vídeos e áudios (pesam demais — use um link), compactados
+  (.zip, .rar), formatos antigos do Office (.doc, .ppt, .xls — salvar como .docx/.pptx/.xlsx),
+  fotos HEIC do iPhone (converter para JPG) e tudo que um navegador consegue executar
+  (.html, .svg, .js, .exe), por segurança. A tela explica o motivo em cada caso.
+- **Liberar mais um tipo:** acrescente uma linha em `FILE_TYPES`, no arquivo
+  `server/materials.js` (com a conferência dos primeiros bytes do arquivo, se houver). A tela
+  lê a lista pelo servidor, então não precisa mexer em mais nada.
+- **Links:** além de arquivos, dá para salvar um link (YouTube, Google Drive, Khan
+  Academy…). Mesma regra dos links de aula: sempre `https://`, e só endereços da internet.
+
+### Onde ficam os arquivos e como são protegidos
+
+Na pasta `materiais`, dentro do `DATA_DIR` (na Railway, o volume `/data`), com **nomes
+aleatórios** — o nome verdadeiro só existe no banco, para mostrar na tela e dar nome ao
+download. A pasta fica **fora do site público**: o único caminho para baixar é pelo portal,
+que confere login e permissão a cada download. Os arquivos são sempre entregues como
+anexo (imagens só abrem no navegador quando a pessoa clica em "Abrir"), sem cache e com
+cabeçalhos que impedem o navegador de interpretar o arquivo como uma página. Material que
+não existe e material que a pessoa não pode ver dão a mesma resposta ("não encontrado").
+
+### Decisões que tomei por você (e como mudar cada uma)
+
+1. **Alunos também podem enviar** (não só professores). Para desligar: menu **Materiais** →
+   desmarque "Permitir que os alunos enviem materiais". Os alunos continuam vendo e
+   baixando o que receberam; só deixam de enviar.
+2. **Os materiais pertencem ao par aluno–professor** (tabela acima), e a secretaria só vê e
+   apaga (não envia). Todas as regras de permissão estão num único arquivo comentado,
+   `server/routes/materials.js`; se quiser outro modelo (por exemplo, materiais abertos a
+   todos os alunos de uma turma), é ali que muda.
+3. **Os materiais ficam guardados até alguém apagar** — não há prazo de validade
+   automático. Professor apaga qualquer material dos seus alunos; aluno apaga só os que
+   enviou; secretaria apaga qualquer um. Apagar remove o arquivo do disco na hora e devolve
+   o espaço. Na ficha do aluno há **"Apagar todos os materiais deste aluno"** (útil quando o
+   aluno encerra). **Remover um aluno não apaga os materiais dele** (o histórico é preservado,
+   como nas aulas e pagamentos): o aviso de "Remover aluno" mostra quantos materiais ele tem
+   e onde apagar. Depois de removido, os materiais continuam na página Materiais (é só
+   buscar pelo nome), e o link do aluno ali leva até a ficha, onde o botão de apagar tudo
+   continua funcionando.
+
+### Quando o espaço acabar
+
+1. **Apague o que não é mais usado.** Na página Materiais, "Maiores primeiro" mostra o que
+   mais pesa; na ficha do aluno há o apagar-tudo.
+2. **Aumentar o teto** (`MATERIALS_MAX_TOTAL_MB`) só ajuda se o volume tiver espaço: no plano
+   Hobby o volume vai até 5 GB (a Railway lista "até 5 GB"). Para mais que isso é preciso o
+   plano Pro ou levar os arquivos para fora da Railway.
+3. **Levar os arquivos para fora da Railway**, por exemplo para o **Cloudflare R2** (10 GB
+   grátis por mês e sem cobrança de saída de dados). É um trabalho à parte, mas está
+   preparado: todo acesso aos arquivos passa por `server/materials.js`, então a troca fica
+   concentrada ali, sem mexer nas telas nem nas permissões.
+
+### Backup dos arquivos
+
+O botão "Baixar backup dos dados" salva **só o banco**: cadastros, aulas, pagamentos e a
+*lista* de materiais (título, quem enviou, nome do arquivo). Os **arquivos** em si ficam só
+no volume da Railway, e o backup de volume da Railway não funciona no plano Hobby (a aba
+"Backups" aparece, mas não deixa criar — veja a seção 4). Na prática:
+
+- Se o volume for perdido, os arquivos se perdem e a lista passa a apontar para arquivos que
+  não existem (quem tenta baixar vê "Este arquivo não está mais disponível no servidor"; basta
+  apagar o item).
+- Trate os materiais como **cópias de trabalho**: o original continua com quem enviou
+  (professor ou aluno). Para material de aula, isso costuma bastar.
+- Se um dia os arquivos forem importantes demais para depender só do volume, as saídas são:
+  plano Pro da Railway com backup de volume (atenção: o backup manual da Railway é limitado
+  a **50% do tamanho do volume**, então para proteger o teto de 4,5 GB o volume precisaria
+  ter ~9 GB) ou levar os arquivos para o R2 (item 3 acima), que tem durabilidade própria.
+
+### Problemas comuns
+
+- **"Não há espaço suficiente no armazenamento de materiais"** — o teto de 4,5 GB (ou os
+  200 MB livres do volume) foi atingido. Veja "Quando o espaço acabar".
+- **O envio falha ou demora muito no celular** — a Railway corta envios acima de 5 minutos
+  e o navegador precisa ficar com a tela aberta durante o envio. Tente por Wi-Fi, mande um
+  arquivo menor ou use um link.
+- **"O conteúdo deste arquivo não confere com o tipo dele"** — o arquivo está corrompido ou
+  foi renomeado (por exemplo, uma imagem chamada `.pdf`). Abra e salve de novo no formato
+  certo.
+- **Uma pessoa não vê um material que deveria ver** — confira se ainda existe uma aula
+  **agendada** entre o professor e o aluno (aulas canceladas não contam), e se o aluno e o
+  professor continuam ativos.
+- **Depois de publicar a atualização:** as tabelas novas de Materiais são criadas sozinhas na
+  primeira vez que o servidor liga; nada do que já existia é alterado.
+
+---
+
+## 7. Solução de problemas
 
 - **"Cannot find module 'node:sqlite'" ou erro parecido ao iniciar** — a versão do
   Node em uso é anterior à 22.5. Confira em Settings do serviço (Railway/Render) se dá
@@ -469,21 +619,24 @@ O calendário é o mesmo em todo lugar: **Agendamento**, ficha do **aluno** e do
 
 ---
 
-## 7. Estrutura do projeto
+## 8. Estrutura do projeto
 
 ```
 server/           todo o backend (servidor, banco de dados, regras de negócio, rotas)
   db.js             conexão com o SQLite e criação das tabelas
-  links.js          regra do link da aula online (sempre https://)
+  links.js          regra dos links (aula online e materiais): sempre https://
+  materials.js      arquivos dos materiais: limites, tipos aceitos, gravação e download
   services.js        regras de negócio: quinzenas, conflitos, faturas, recorrência
   auth.js            login/senha/sessão
   router.js          roteador HTTP simples (sem framework)
-  routes/            um arquivo por área (alunos, professores, agendamento, pagamentos)
+  routes/            um arquivo por área (alunos, professores, agendamento, pagamentos,
+                     materiais — este com todas as regras de quem pode ver/enviar/apagar)
   index.js           ponto de entrada — inicia o servidor
 public/            todo o frontend (HTML/CSS/JS puro, sem build)
   index.html         estrutura principal do site (depois do login, para a secretaria)
   login.html         tela de login
   professor.html     área exclusiva de cada professor logado
+  aluno.html         área exclusiva de cada aluno logado
   assets/            arquivos da identidade visual (ver nota abaixo)
   css/style.css      estilo visual
   js/                lógica de cada página + calendário + funções compartilhadas

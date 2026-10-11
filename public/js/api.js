@@ -22,6 +22,38 @@ const api = {
   post(path, body) { return this.request('POST', path, body === undefined ? {} : body); },
   put(path, body) { return this.request('PUT', path, body === undefined ? {} : body); },
   delete(path) { return this.request('DELETE', path); },
+
+  // Envia um arquivo (o arquivo em si é o corpo da requisição, sem JSON) e avisa o progresso.
+  //   api.upload('/api/materials/file?studentId=3', file, {
+  //     headers: { 'X-File-Name': encodeURIComponent(file.name) },
+  //     onProgress: (enviado, total) => { ... },
+  //     signal: abortController.signal,          // para cancelar o envio
+  //   })
+  // Erros chegam como Error com .status (resposta do servidor), .network (internet caiu) ou .aborted.
+  upload(path, file, options) {
+    options = options || {};
+    return new Promise((resolve, reject) => {
+      const fail = (message, extra) => { const err = new Error(message); Object.assign(err, extra); reject(err); };
+      if (options.signal && options.signal.aborted) { fail('Envio cancelado.', { aborted: true }); return; }
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', path);
+      xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+      for (const [name, value] of Object.entries(options.headers || {})) xhr.setRequestHeader(name, value);
+      if (options.onProgress) {
+        xhr.upload.onprogress = (e) => { if (e.lengthComputable) options.onProgress(e.loaded, e.total); };
+      }
+      xhr.onload = () => {
+        let data = null;
+        try { data = JSON.parse(xhr.responseText); } catch (e) { /* resposta sem corpo JSON */ }
+        if (xhr.status >= 200 && xhr.status < 300) resolve(data);
+        else fail((data && data.error) || `Erro (${xhr.status})`, { status: xhr.status });
+      };
+      xhr.onerror = () => fail('Não foi possível enviar o arquivo. Confira a conexão com a internet e tente de novo.', { network: true });
+      xhr.onabort = () => fail('Envio cancelado.', { aborted: true });
+      if (options.signal) options.signal.addEventListener('abort', () => xhr.abort(), { once: true });
+      xhr.send(file);
+    });
+  },
 };
 
 function escapeHtml(str) {
@@ -31,38 +63,42 @@ function escapeHtml(str) {
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
-// ---- Link da aula online ----
+// ---- Links (link da aula online e links de materiais) ----
 // Mesma regra do servidor (server/links.js): o link sempre termina como "https://...".
 // Sem esquema ("meet.google.com/abc") ganha https://; "http://" vira "https://"; qualquer outro
 // tipo de endereço (javascript:, ftp:...) é recusado. Sem isso, o navegador entende um link sem
 // https:// como um endereço DENTRO do portal, e o link da aula não abre o Meet.
 // Retorna { ok: true, value, changed } ou { ok: false, error }.
-function normalizeMeetingLink(input) {
-  if (input === undefined || input === null) return { ok: true, value: null, changed: false };
-  const raw = String(input).trim();
-  if (raw === '') return { ok: true, value: null, changed: false };
-  if (raw.length > 1000) return { ok: false, error: 'O link da aula é grande demais.' };
-  if (/\s/.test(raw)) return { ok: false, error: 'O link da aula não pode ter espaços. Copie e cole o endereço completo.' };
+function makeLinkNormalizer(subject, example) {
+  const invalido = { ok: false, error: `${subject} não parece um endereço válido. Confira se copiou o link inteiro.` };
+  return function normalizeLink(input) {
+    if (input === undefined || input === null) return { ok: true, value: null, changed: false };
+    const raw = String(input).trim();
+    if (raw === '') return { ok: true, value: null, changed: false };
+    if (raw.length > 1000) return { ok: false, error: `${subject} é grande demais.` };
+    if (/\s/.test(raw)) return { ok: false, error: `${subject} não pode ter espaços. Copie e cole o endereço completo.` };
 
-  let candidate;
-  const web = raw.match(/^https?:\/*(.*)$/i); // https://x   http://x   https:/x   https:x
-  if (web) {
-    candidate = 'https://' + web[1];
-  } else if (raw.startsWith('//')) {
-    candidate = 'https:' + raw;
-  } else if (/^[a-z][a-z0-9+.-]*:(?!\d)/i.test(raw)) {
-    return { ok: false, error: 'O link da aula precisa ser um endereço da internet, como https://meet.google.com/...' };
-  } else {
-    candidate = 'https://' + raw;
-  }
+    let candidate;
+    const web = raw.match(/^https?:\/*(.*)$/i); // https://x   http://x   https:/x   https:x
+    if (web) {
+      candidate = 'https://' + web[1];
+    } else if (raw.startsWith('//')) {
+      candidate = 'https:' + raw;
+    } else if (/^[a-z][a-z0-9+.-]*:(?!\d)/i.test(raw)) {
+      return { ok: false, error: `${subject} precisa ser um endereço da internet, como ${example}` };
+    } else {
+      candidate = 'https://' + raw;
+    }
 
-  const invalido = { ok: false, error: 'O link da aula não parece um endereço válido. Confira se copiou o link inteiro.' };
-  let url;
-  try { url = new URL(candidate); } catch (e) { return invalido; }
-  const dominioOk = /^[a-z0-9-]+(\.[a-z0-9-]+)+$/i.test(url.hostname);
-  if (url.protocol !== 'https:' || !dominioOk || url.username || url.password) return invalido;
-  return { ok: true, value: candidate, changed: candidate !== raw };
+    let url;
+    try { url = new URL(candidate); } catch (e) { return invalido; }
+    const dominioOk = /^[a-z0-9-]+(\.[a-z0-9-]+)+$/i.test(url.hostname);
+    if (url.protocol !== 'https:' || !dominioOk || url.username || url.password) return invalido;
+    return { ok: true, value: candidate, changed: candidate !== raw };
+  };
 }
+const normalizeMeetingLink = makeLinkNormalizer('O link da aula', 'https://meet.google.com/...');
+const normalizeMaterialLink = makeLinkNormalizer('O link', 'https://www.youtube.com/...');
 
 // Escapa o texto e deixa o navegador quebrar a linha DEPOIS de / ? & = # (em vez de no meio de uma palavra),
 // para um endereço comprido ficar legível em telas estreitas. O texto copiado continua sendo o endereço exato.
@@ -73,11 +109,29 @@ function breakableText(text) {
 // HTML do link da aula (usado nas telas do admin, do professor e do aluno): o próprio endereço, escrito por
 // extenso e clicável (abre em outra aba). Normaliza na hora de exibir, então até um link antigo salvo sem
 // https:// aparece e abre direito.
-function meetingLinkHtml(link) {
+function writtenLinkHtml(link, normalize) {
   if (link === null || link === undefined || String(link).trim() === '') return '—';
-  const r = normalizeMeetingLink(link);
+  const r = normalize(link);
   if (!r.ok) return `<span class="muted" title="${escapeHtml(String(link))}">Link inválido</span>`;
   return `<a class="meeting-link" href="${escapeHtml(r.value)}" target="_blank" rel="noopener noreferrer" title="Abrir em uma nova aba">${breakableText(r.value)}</a>`;
+}
+function meetingLinkHtml(link) { return writtenLinkHtml(link, normalizeMeetingLink); }
+// Mesma coisa para o link de um material de aula.
+function materialLinkHtml(link) { return writtenLinkHtml(link, normalizeMaterialLink); }
+
+// Tamanho de arquivo legível. 1 MB = 1.000.000 bytes — a mesma conta dos limites do servidor,
+// para o que a tela mostra bater com o que o servidor aceita.
+function formatBytes(bytes) {
+  const n = Math.max(0, Number(bytes) || 0);
+  if (n < 1000) return `${Math.round(n)} B`;
+  const units = ['KB', 'MB', 'GB', 'TB'];
+  const round = (v) => (v >= 100 ? Math.round(v) : Math.round(v * 10) / 10); // 123 MB, 12,3 MB, 1,2 GB
+  let value = n / 1000;
+  let i = 0;
+  while (round(value) >= 1000 && i < units.length - 1) { value /= 1000; i++; }
+  const shown = round(value);
+  const digits = shown >= 100 ? 0 : 1;
+  return `${shown.toLocaleString('pt-BR', { minimumFractionDigits: digits, maximumFractionDigits: digits })} ${units[i]}`;
 }
 
 function formatCurrency(value) {

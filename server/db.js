@@ -146,6 +146,32 @@ CREATE TABLE IF NOT EXISTS class_feedback (
 
 CREATE INDEX IF NOT EXISTS idx_feedback_teacher_student ON class_feedback(teacher_id, student_id);
 
+-- Materiais de aula (arquivos e links) compartilhados entre um aluno e um professor.
+-- O arquivo em si fica em disco (pasta "materiais" dentro de DATA_DIR); aqui só o registro.
+CREATE TABLE IF NOT EXISTS materials (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  student_id INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+  teacher_id INTEGER NOT NULL REFERENCES teachers(id) ON DELETE CASCADE,
+  uploader_type TEXT NOT NULL CHECK (uploader_type IN ('teacher', 'student')),
+  kind TEXT NOT NULL CHECK (kind IN ('file', 'link')),
+  title TEXT NOT NULL,
+  note TEXT,
+  original_name TEXT,
+  stored_name TEXT,
+  size INTEGER NOT NULL DEFAULT 0,
+  url TEXT,
+  created_at TEXT DEFAULT (datetime('now', 'localtime'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_materials_pair ON materials(student_id, teacher_id);
+CREATE INDEX IF NOT EXISTS idx_materials_created ON materials(created_at);
+
+-- Ajustes simples do sistema (chave/valor). Hoje: se o aluno pode enviar materiais.
+CREATE TABLE IF NOT EXISTS settings (
+  key TEXT PRIMARY KEY,
+  value TEXT
+);
+
 CREATE TABLE IF NOT EXISTS recurring_expenses (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   description TEXT NOT NULL,
@@ -266,4 +292,4 @@ function backupBuffer() {
   return fs.readFileSync(DB_PATH);
 }
 
-module.exports = { db, backupBuffer };
+module.exports = { db, backupBuffer, DATA_DIR };

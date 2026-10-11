@@ -32,6 +32,7 @@ function renderShell() {
     </div>
     <div class="tabs">
       <button class="tab-btn active" data-tab="aulas">Minhas aulas</button>
+      <button class="tab-btn" data-tab="materiais">Materiais</button>
       <button class="tab-btn" data-tab="feedbacks">Feedbacks</button>
     </div>
     <div id="tab-content"></div>
@@ -48,9 +49,15 @@ function renderShell() {
   function renderTab() {
     const el = document.getElementById('tab-content');
     if (activeTab === 'aulas') renderAulas(el);
+    else if (activeTab === 'materiais') renderMateriais(el);
     else if (activeTab === 'feedbacks') renderFeedbacks(el);
   }
   renderTab();
+}
+
+function renderMateriais(el) {
+  el.innerHTML = `<div class="card"><div id="aluno-materials"></div></div>`;
+  MaterialsPanel.mount(document.getElementById('aluno-materials'), { viewer: 'student', title: 'Materiais das aulas' });
 }
 
 async function renderAulas(el) {

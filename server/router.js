@@ -18,18 +18,20 @@ const MIME = {
 
 class Router {
   constructor() {
-    this.routes = []; // { method, segments, handler }
+    this.routes = []; // { method, segments, handler, opts }
   }
 
-  _add(method, routePath, handler) {
+  // opts (opcional): { raw: true } -> o corpo da requisição NÃO é lido como JSON; a própria rota
+  // recebe o fluxo de bytes em "req" (usado no envio de arquivos, que pode ter dezenas de MB).
+  _add(method, routePath, handler, opts) {
     const segments = routePath.split('/').filter(Boolean);
-    this.routes.push({ method, segments, handler });
+    this.routes.push({ method, segments, handler, opts: opts || {} });
   }
 
-  get(p, h) { this._add('GET', p, h); }
-  post(p, h) { this._add('POST', p, h); }
-  put(p, h) { this._add('PUT', p, h); }
-  delete(p, h) { this._add('DELETE', p, h); }
+  get(p, h, o) { this._add('GET', p, h, o); }
+  post(p, h, o) { this._add('POST', p, h, o); }
+  put(p, h, o) { this._add('PUT', p, h, o); }
+  delete(p, h, o) { this._add('DELETE', p, h, o); }
 
   _match(method, pathname) {
     const reqSegments = pathname.split('/').filter(Boolean);
@@ -48,17 +50,28 @@ class Router {
           break;
         }
       }
-      if (ok) return { handler: route.handler, params };
+      if (ok) return { handler: route.handler, params, opts: route.opts };
     }
     return null;
   }
 
   async handle(req, res, staticDir) {
-    const parsed = url.parse(req.url, true);
-    const pathname = decodeURIComponent(parsed.pathname);
+    // Um endereço malformado (ex.: "/%E0%A4%A" ou "/api/x/%25zz") faz decodeURIComponent lançar
+    // erro. Antes isso acontecia fora de qualquer try/catch e derrubava o servidor inteiro;
+    // agora vira uma resposta 400 e o servidor segue no ar.
+    let parsed;
+    let pathname;
+    let match = null;
+    try {
+      parsed = url.parse(req.url, true);
+      pathname = decodeURIComponent(parsed.pathname || '/');
+      if (pathname.startsWith('/api/')) match = this._match(req.method, pathname);
+    } catch (e) {
+      sendJson(res, 400, { error: 'Endereço inválido' });
+      return;
+    }
 
     if (pathname.startsWith('/api/')) {
-      const match = this._match(req.method, pathname);
       if (!match) {
         sendJson(res, 404, { error: 'Rota não encontrada' });
         return;
@@ -66,14 +79,21 @@ class Router {
       try {
         req.params = match.params;
         req.query = parsed.query;
-        if (['POST', 'PUT', 'DELETE'].includes(req.method)) {
+        if (match.opts && match.opts.raw) {
+          req.body = {}; // a rota lê o corpo por conta própria (envio de arquivo)
+        } else if (['POST', 'PUT', 'DELETE'].includes(req.method)) {
           req.body = await readJsonBody(req);
         } else {
           req.body = {};
         }
         await match.handler(req, res);
       } catch (err) {
-        if (err && err.statusCode) {
+        if (res.headersSent) {
+          // Já começou a responder (ex.: download interrompido): não dá para mandar um erro em
+          // JSON por cima; só encerra a conexão.
+          console.error('Erro depois de iniciar a resposta:', err);
+          res.destroy();
+        } else if (err && err.statusCode) {
           sendJson(res, err.statusCode, { error: err.message });
         } else {
           console.error('Erro interno:', err);
@@ -84,7 +104,12 @@ class Router {
     }
 
     // Servir arquivos estáticos do frontend
-    serveStatic(req, res, pathname, staticDir);
+    try {
+      serveStatic(req, res, pathname, staticDir);
+    } catch (e) {
+      // Ex.: endereço com caractere nulo ("/%00"), que o sistema de arquivos recusa na hora.
+      if (!res.headersSent) { res.writeHead(400); res.end('Bad request'); } else { res.destroy(); }
+    }
   }
 }
 

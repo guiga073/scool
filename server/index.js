@@ -44,12 +44,28 @@ require('./routes/teacherPortal').register(router);
 require('./routes/studentPortal').register(router);
 require('./routes/backup').register(router);
 require('./routes/finance').register(router);
+require('./routes/materials').register(router);
+
+// Materiais de aula: prepara a pasta no volume, limpa envios que ficaram pela metade e
+// arquivos sem registro no banco.
+require('./materials').init();
 
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 const PORT = process.env.PORT || 3000;
 
 const server = http.createServer((req, res) => {
-  router.handle(req, res, PUBLIC_DIR);
+  // Rede de segurança: um erro inesperado numa requisição nunca derruba o servidor inteiro.
+  router.handle(req, res, PUBLIC_DIR).catch((err) => {
+    console.error('Erro não tratado na requisição:', err);
+    try {
+      if (!res.headersSent) {
+        res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ error: 'Erro interno do servidor' }));
+      } else {
+        res.destroy();
+      }
+    } catch (e) { /* conexão já fechada */ }
+  });
 });
 
 // Roda as verificações periódicas (gerar faturas quinzenais / mensalidades) assim que o

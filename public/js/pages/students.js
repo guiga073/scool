@@ -176,12 +176,26 @@ Pages.studentDetail = async function (root, id) {
       <button class="tab-btn" data-tab="calendario">Calendário de aulas</button>
       <button class="tab-btn" data-tab="notas">Notas</button>
       <button class="tab-btn" data-tab="observacoes">Observações</button>
+      <button class="tab-btn" data-tab="materiais">Materiais</button>
     </div>
     <div id="tab-content"></div>
   `;
 
   document.getElementById('delete-student-btn').addEventListener('click', async () => {
-    const ok = await confirmModal(`Remover ${student.name}? O histórico de aulas e pagamentos será mantido, mas o aluno não aparecerá mais nas listas.`, 'Remover aluno');
+    // Os materiais de aula do aluno continuam guardados (e ocupando espaço) depois da remoção:
+    // se ele tem algum, o aviso diz isso e onde apagar.
+    let materialsNote = '';
+    try {
+      const mats = await api.get(`/api/materials?studentId=${encodeURIComponent(id)}`);
+      if (mats.length > 0) {
+        const files = mats.filter(m => m.kind === 'file');
+        const parts = [];
+        if (files.length > 0) parts.push(`${MaterialsPanel.plural(files.length, 'arquivo', 'arquivos')} (${formatBytes(files.reduce((sum, m) => sum + m.size, 0))})`);
+        if (mats.length > files.length) parts.push(MaterialsPanel.plural(mats.length - files.length, 'link', 'links'));
+        materialsNote = ` Os materiais de aula dele — ${parts.join(' e ')} — continuam guardados e ocupando espaço. Para apagá-los antes, cancele e use a aba Materiais desta ficha (“Apagar todos os materiais deste aluno”).`;
+      }
+    } catch (e) { /* o aviso é só um extra: se falhar, segue sem ele */ }
+    const ok = await confirmModal(`Remover ${student.name}? O histórico de aulas e pagamentos será mantido, mas o aluno não aparecerá mais nas listas.${materialsNote}`, 'Remover aluno');
     if (!ok) return;
     await api.delete(`/api/students/${id}`);
     showToast('Aluno removido.');
@@ -203,6 +217,12 @@ Pages.studentDetail = async function (root, id) {
     else if (activeTab === 'calendario') renderCalendario(el);
     else if (activeTab === 'notas') renderNotas(el);
     else if (activeTab === 'observacoes') renderObservacoes(el);
+    else if (activeTab === 'materiais') renderMateriais(el);
+  }
+
+  function renderMateriais(el) {
+    el.innerHTML = `<div class="card"><div id="student-materials"></div></div>`;
+    MaterialsPanel.mount(document.getElementById('student-materials'), { viewer: 'admin', studentId: id, studentName: student.name });
   }
 
   function renderDados(el) {
