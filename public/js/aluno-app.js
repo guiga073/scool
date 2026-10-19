@@ -29,6 +29,9 @@ function renderShell() {
   root.innerHTML = `
     <div class="page-header">
       <div><div class="eyebrow">Bem-vindo(a)</div><h1>${escapeHtml(currentStudent.name)}</h1></div>
+      <a class="btn btn-outline manual-link" id="manual-link" href="/api/student-portal/manual.pdf" target="_blank" rel="noopener" aria-label="Manual do aluno (PDF, abre em uma nova aba)" title="Guia de como usar a Área do Aluno">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 4h6a4 4 0 0 1 4 4v12a3 3 0 0 0-3-3H2z"/><path d="M22 4h-6a4 4 0 0 0-4 4v12a3 3 0 0 1 3-3h7z"/></svg>
+        Manual do aluno</a>
     </div>
     <div class="tabs">
       <button class="tab-btn active" data-tab="aulas">Minhas aulas</button>

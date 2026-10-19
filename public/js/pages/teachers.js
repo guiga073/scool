@@ -195,6 +195,9 @@ async function teacherFormModal(existing, onSaved) {
 
 Pages.teachersList = async function (root, opts) {
   const search = (opts && opts.search) || '';
+  // A lista inteira vem de uma vez (são poucos professores) e a busca/filtro acontecem aqui na tela:
+  // assim a busca também acha pela disciplina e ignora acento e maiúscula ("matematica" acha "Matemática").
+  const [teachers, subjects] = await Promise.all([api.get('/api/teachers'), api.get('/api/subjects')]);
   root.innerHTML = `
     <div class="page-header">
       <div><div class="eyebrow">Cadastro</div><h1>Professores</h1>
@@ -205,8 +208,14 @@ Pages.teachersList = async function (root, opts) {
       </div>
     </div>
     <div class="card">
-      <input type="text" class="search-input" id="teacher-search" placeholder="Buscar professor por nome…" value="${escapeHtml(search)}">
-      <div id="teacher-list-wrap" style="margin-top:16px;"><div class="loading-dots">Carregando…</div></div>
+      <div class="flex gap-10 wrap teacher-filters">
+        <input type="text" class="search-input" id="teacher-search" placeholder="Buscar por nome ou disciplina…" autocomplete="off" aria-label="Buscar professor" value="${escapeHtml(search)}">
+        <select id="teacher-subject" aria-label="Filtrar por disciplina">
+          <option value="">Todas as disciplinas</option>
+          ${subjects.map(s => `<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('')}
+        </select>
+      </div>
+      <div id="teacher-list-wrap" style="margin-top:16px;"></div>
     </div>
   `;
   document.getElementById('add-teacher-btn').addEventListener('click', () => {
@@ -215,24 +224,28 @@ Pages.teachersList = async function (root, opts) {
   document.getElementById('bulk-reset-btn').addEventListener('click', bulkResetPasswords);
 
   const searchInput = document.getElementById('teacher-search');
-  let debounce;
-  searchInput.addEventListener('input', () => {
-    clearTimeout(debounce);
-    debounce = setTimeout(() => loadList(searchInput.value), 250);
-  });
+  const subjectSelect = document.getElementById('teacher-subject');
+  const wrap = document.getElementById('teacher-list-wrap');
+  const fold = (s) => String(s === undefined || s === null ? '' : s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 
-  async function loadList(q) {
-    const wrap = document.getElementById('teacher-list-wrap');
-    const teachers = await api.get(`/api/teachers${q ? '?search=' + encodeURIComponent(q) : ''}`);
-    if (teachers.length === 0) {
-      wrap.innerHTML = `<div class="empty-state"><div class="eyebrow">${q ? 'Nenhum professor' : 'Nenhum professor'}</div>${q ? 'Nenhum professor encontrado para essa busca.' : 'Cadastre o primeiro professor para começar.'}</div>`;
+  function renderList() {
+    const q = fold(searchInput.value.trim());
+    const subjectId = subjectSelect.value;
+    const filtering = Boolean(q || subjectId);
+    const shown = teachers.filter(t =>
+      (!subjectId || t.subjects.some(s => String(s.id) === subjectId)) &&
+      (!q || fold(t.name).includes(q) || t.subjects.some(s => fold(s.name).includes(q)))
+    );
+    if (shown.length === 0) {
+      wrap.innerHTML = `<div class="empty-state"><div class="eyebrow">Nenhum professor</div>${filtering ? 'Nenhum professor encontrado para essa busca.' : 'Cadastre o primeiro professor para começar.'}</div>`;
       return;
     }
     wrap.innerHTML = `
+      ${filtering ? `<p class="text-sm muted" style="margin:0 0 8px 0;">${shown.length === 1 ? '1 professor' : `${shown.length} professores`}</p>` : ''}
       <div class="table-wrap"><table>
         <thead><tr><th>Nome</th><th>Disciplinas</th><th>Telefone</th><th>PIX</th><th>Acesso</th></tr></thead>
         <tbody>
-          ${teachers.map(t => `
+          ${shown.map(t => `
             <tr class="row-link" data-id="${t.id}">
               <td><strong>${escapeHtml(t.name)}</strong></td>
               <td>${t.subjects.map(s => `<span class="badge badge-neutral" style="margin-right:3px;">${escapeHtml(s.name)}</span>`).join('') || '<span class="muted text-sm">—</span>'}</td>
@@ -248,7 +261,10 @@ Pages.teachersList = async function (root, opts) {
       tr.addEventListener('click', () => { location.hash = `#/professores/${tr.dataset.id}`; });
     });
   }
-  loadList(search);
+
+  searchInput.addEventListener('input', renderList);
+  subjectSelect.addEventListener('change', renderList);
+  renderList();
 };
 
 Pages.teacherDetail = async function (root, id) {

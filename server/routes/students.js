@@ -10,6 +10,25 @@ function studentToJson(row) {
   return { ...rest, monthly_payment: !!row.monthly_payment, active: !!row.active, has_login: !!row.login_email };
 }
 
+// Série do aluno (ex.: "6º ano", "2ª série EM"): texto livre e curto, opcional. Espaços sobrando
+// (inclusive quebras de linha) são arrumados, e vazio vira "não informada" (NULL).
+// Um valor grande demais é recusado em vez de cortado, para nunca gravar algo diferente do digitado.
+const GRADE_LEVEL_MAX = 40;
+
+function cleanGradeLevel(value) {
+  if (value === undefined || value === null) return null;
+  if (typeof value === 'number' && Number.isFinite(value)) value = String(value);
+  if (typeof value !== 'string') throw httpError(400, 'Série inválida');
+  const text = value
+    .replace(/[\u200b-\u200f\u202a-\u202e\u2060-\u2064\ufeff]/g, '') // caracteres invisíveis / de direção do texto
+    .replace(/[\u0000-\u001f\u007f-\u009f]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!text) return null;
+  if ([...text].length > GRADE_LEVEL_MAX) throw httpError(400, `A série pode ter até ${GRADE_LEVEL_MAX} caracteres`);
+  return text;
+}
+
 // Garante que o e-mail de acesso não colida com um admin, um professor, ou outro aluno.
 function assertLoginEmailAvailable(email, excludeStudentId) {
   const conflict = svc.findLoginEmailConflict(db, email, excludeStudentId ? { type: 'student', id: excludeStudentId } : null);
@@ -35,17 +54,18 @@ function register(router) {
     requireAuth(req);
     const b = req.body;
     if (!b.name || !b.name.trim()) throw httpError(400, 'Nome do aluno é obrigatório');
+    const gradeLevel = cleanGradeLevel(b.grade_level);
     const loginEmail = b.login_email ? String(b.login_email).trim().toLowerCase() : null;
     assertLoginEmailAvailable(loginEmail, null);
     if (loginEmail && !b.login_password) throw httpError(400, 'Defina uma senha de acesso para o aluno');
 
     const info = db.prepare(`
-      INSERT INTO students (name, address, guardian_name, guardian_phone, phone, email, monthly_payment, login_email, password_hash)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO students (name, address, guardian_name, guardian_phone, phone, email, monthly_payment, login_email, password_hash, grade_level)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       b.name.trim(), b.address || null, b.guardian_name || null, b.guardian_phone || null,
       b.phone || null, b.email || null, b.monthly_payment ? 1 : 0,
-      loginEmail, b.login_password ? hashPassword(b.login_password) : null
+      loginEmail, b.login_password ? hashPassword(b.login_password) : null, gradeLevel
     );
     const row = db.prepare('SELECT * FROM students WHERE id = ?').get(info.lastInsertRowid);
     sendJson(res, 201, studentToJson(row));
@@ -77,6 +97,9 @@ function register(router) {
     const existing = db.prepare('SELECT * FROM students WHERE id = ?').get(req.params.id);
     if (!existing) throw httpError(404, 'Aluno não encontrado');
     if (!b.name || !b.name.trim()) throw httpError(400, 'Nome do aluno é obrigatório');
+    // Se o pedido nem menciona a série (ex.: uma tela aberta antes desta atualização), ela fica como está:
+    // só some se for enviada vazia de propósito.
+    const gradeLevel = Object.prototype.hasOwnProperty.call(b, 'grade_level') ? cleanGradeLevel(b.grade_level) : existing.grade_level;
 
     const loginEmail = b.login_email ? String(b.login_email).trim().toLowerCase() : null;
     assertLoginEmailAvailable(loginEmail, existing.id);
@@ -91,12 +114,12 @@ function register(router) {
 
     db.prepare(`
       UPDATE students SET name=?, address=?, guardian_name=?, guardian_phone=?, phone=?, email=?, monthly_payment=?,
-        login_email=?, password_hash=?
+        login_email=?, password_hash=?, grade_level=?
       WHERE id=?
     `).run(
       b.name.trim(), b.address || null, b.guardian_name || null, b.guardian_phone || null,
       b.phone || null, b.email || null, b.monthly_payment ? 1 : 0,
-      loginEmail, passwordHash,
+      loginEmail, passwordHash, gradeLevel,
       req.params.id
     );
     const row = db.prepare('SELECT * FROM students WHERE id = ?').get(req.params.id);

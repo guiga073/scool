@@ -286,4 +286,5 @@ function register(router) {
   });
 }
 
-module.exports = { register };
+// isNavigation e sendErrorPage também são usados pela rota do manual do aluno (routes/manual.js).
+module.exports = { register, isNavigation, sendErrorPage };

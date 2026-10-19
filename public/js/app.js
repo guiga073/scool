@@ -26,8 +26,12 @@ async function router() {
     if (page === 'dashboard') await Pages.dashboard(root);
     else if (page === 'alunos' && !id) await Pages.studentsList(root);
     else if (page === 'alunos' && id) await Pages.studentDetail(root, id);
+    else if (page === 'interessados' && !id) await Pages.leadsList(root);
+    else if (page === 'interessados' && id) await Pages.leadDetail(root, id);
     else if (page === 'professores' && !id) await Pages.teachersList(root);
     else if (page === 'professores' && id) await Pages.teacherDetail(root, id);
+    else if (page === 'talentos' && !id) await Pages.talentsList(root);
+    else if (page === 'talentos' && id) await Pages.talentDetail(root, id);
     else if (page === 'feedbacks') await Pages.feedbacks(root);
     else if (page === 'materiais') await Pages.materials(root);
     else if (page === 'financeiro') await Pages.finance(root);

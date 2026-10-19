@@ -595,4 +595,12 @@ module.exports = {
   setStudentUploads,
   cleanFileName, // exportados para os testes
   extensionOf,
+  // Conferências de arquivo e leitura de limites, que o Banco de talentos (server/talents.js) reaproveita.
+  MB,
+  readMb,
+  MAGIC,
+  startsWith,
+  contentDisposition,
+  declaredLength,
+  abortedError,
 };

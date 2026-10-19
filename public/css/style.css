@@ -132,6 +132,10 @@ button, input, select, textarea { font-family: inherit; font-size: inherit; colo
   margin: 14px 10px;
   padding: 0;
   flex: 1;
+  /* Em tela baixa (celular na horizontal, ou 320 x 568) a lista rola sozinha e o rodapé ("Sair",
+     "Baixar backup") continua à vista, em vez de ser empurrado para fora da tela. */
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .nav-item a {
@@ -703,4 +707,63 @@ table.avail-grid td.avail-on:hover { background: var(--primary-soft); }
   .stat-grid { grid-template-columns: 1fr 1fr; }
   .card { padding: 16px 16px; }
   .modal { padding: 20px; }
+}
+
+/* Botão "Manual do aluno" (área do aluno): do tamanho de um dedo no celular. */
+@media (max-width: 560px) {
+  .manual-link { min-height: 40px; }
+}
+
+/* ---------- Professores: busca + filtro por disciplina (mesmo visual do Banco de talentos) ---------- */
+
+.teacher-filters { align-items: center; }
+.teacher-filters .search-input { flex: 1 1 280px; max-width: 380px; }
+.teacher-filters select { width: auto; flex: 0 1 auto; min-width: 190px; max-width: 100%; }
+@media (max-width: 560px) {
+  .teacher-filters .search-input, .teacher-filters select { flex: 1 1 100%; width: 100%; max-width: none; }
+}
+
+/* ---------- Controle de interessados ---------- */
+
+.lead-filters { align-items: center; }
+.lead-filters .search-input { flex: 1 1 280px; max-width: 380px; }
+.lead-filters select { width: auto; flex: 0 1 auto; min-width: 190px; max-width: 100%; }
+.lead-cell-sub { font-size: 12.5px; color: var(--ink-soft); overflow-wrap: anywhere; }
+.lead-notes { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.lead-wrap { overflow-wrap: anywhere; }
+/* "Virou aluno": o azul cheio da marca, para se destacar entre as outras situações. */
+.badge-won { background: var(--confirmed); color: #fff; }
+@media (max-width: 560px) {
+  .lead-filters .search-input, .lead-filters select { flex: 1 1 100%; width: 100%; max-width: none; }
+}
+/* Lista no celular: telefone, situação e datas não quebram no meio (a tabela rola para o lado, dentro do cartão). */
+@media (max-width: 700px) {
+  .lead-table td:nth-child(n+4) { white-space: nowrap; }
+  .lead-table td:nth-child(1) { min-width: 150px; }
+  .lead-table td:nth-child(2) { min-width: 130px; }
+  .lead-table td:nth-child(3) { min-width: 140px; }
+}
+
+/* ---------- Banco de talentos ---------- */
+
+.talent-filters { align-items: center; }
+.talent-filters .search-input { flex: 1 1 280px; max-width: 380px; }
+.talent-filters select { width: auto; flex: 0 1 auto; min-width: 190px; max-width: 100%; }
+.talent-cell-sub { font-size: 12.5px; color: var(--ink-soft); overflow-wrap: anywhere; }
+.talent-notes { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.talent-wrap { overflow-wrap: anywhere; }
+/* Escolha de arquivo do currículo: nunca mais larga que o formulário (nomes de arquivo longos). */
+.talent-file { width: 100%; max-width: 100%; }
+@media (max-width: 560px) {
+  .talent-filters .search-input, .talent-filters select { flex: 1 1 100%; width: 100%; max-width: none; }
+}
+/* Lista no celular: telefone, e-mail, valores e currículo não quebram no meio (a tabela rola para o lado, dentro do cartão). */
+@media (max-width: 700px) {
+  .talent-table td:nth-child(n+3) { white-space: nowrap; }
+  .talent-table td:nth-child(1) { min-width: 130px; }
+  .talent-table td:nth-child(2) { min-width: 150px; }
+}
+/* Grade de disponibilidade só para ver (ficha): em tela larga fica compacta em vez de esticar a coluna das horas. */
+@media (min-width: 700px) {
+  .talent-avail table.avail-grid { width: auto; }
 }

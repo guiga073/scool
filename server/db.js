@@ -172,6 +172,67 @@ CREATE TABLE IF NOT EXISTS settings (
   value TEXT
 );
 
+-- Banco de talentos (só a administração vê): pessoas que a Olimais pode querer contratar como
+-- professor no futuro. Têm os mesmos dados de um professor, menos o que só vale depois de contratar
+-- (login, chave PIX, transporte), mais o currículo e as observações.
+CREATE TABLE IF NOT EXISTS talents (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  phone TEXT,
+  email TEXT,
+  address TEXT,
+  availability_grid TEXT,
+  hourly_rate_presencial REAL,
+  hourly_rate_online REAL,
+  notes TEXT,
+  created_at TEXT DEFAULT (datetime('now', 'localtime'))
+);
+
+CREATE TABLE IF NOT EXISTS talent_subjects (
+  talent_id INTEGER NOT NULL REFERENCES talents(id) ON DELETE CASCADE,
+  subject_id INTEGER NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
+  PRIMARY KEY (talent_id, subject_id)
+);
+
+-- Currículo do talento: um arquivo por talento, guardado DENTRO do banco de dados (e não numa
+-- pasta), para entrar no "Baixar backup dos dados" e sumir junto com o talento. O tamanho é
+-- limitado em server/talents.js.
+CREATE TABLE IF NOT EXISTS talent_cvs (
+  talent_id INTEGER PRIMARY KEY REFERENCES talents(id) ON DELETE CASCADE,
+  file_name TEXT NOT NULL,
+  size INTEGER NOT NULL,
+  data BLOB NOT NULL,
+  uploaded_at TEXT DEFAULT (datetime('now', 'localtime'))
+);
+
+-- Controle de interessados (só a administração vê): pais e responsáveis que entraram em contato,
+-- perguntaram sobre as aulas e ainda não agendaram nada. Ficam guardados para a Olimais retomar o
+-- contato mais tarde. As datas são só o dia ("AAAA-MM-DD"); situação, modalidade e origem são
+-- códigos conferidos em server/leads.js (por isso sem CHECK aqui: acrescentar uma opção no futuro
+-- não exige refazer a tabela).
+CREATE TABLE IF NOT EXISTS leads (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  phone TEXT,
+  email TEXT,
+  student_name TEXT,
+  grade_level TEXT,
+  modality TEXT,
+  source TEXT,
+  status TEXT NOT NULL DEFAULT 'novo',
+  contact_date TEXT,
+  follow_up_date TEXT,
+  notes TEXT,
+  created_at TEXT DEFAULT (datetime('now', 'localtime')),
+  updated_at TEXT DEFAULT (datetime('now', 'localtime'))
+);
+
+CREATE TABLE IF NOT EXISTS lead_subjects (
+  lead_id INTEGER NOT NULL REFERENCES leads(id) ON DELETE CASCADE,
+  subject_id INTEGER NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
+  PRIMARY KEY (lead_id, subject_id)
+);
+
 CREATE TABLE IF NOT EXISTS recurring_expenses (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   description TEXT NOT NULL,
@@ -206,6 +267,9 @@ ensureColumn('teachers', 'login_email', 'TEXT');
 ensureColumn('teachers', 'password_hash', 'TEXT');
 ensureColumn('students', 'login_email', 'TEXT');
 ensureColumn('students', 'password_hash', 'TEXT');
+// Série em que o aluno está (texto livre, opcional). Alunos que já existiam ficam sem série (vazio).
+// Atenção ao nome: a tabela "grades" guarda as NOTAS; a série é "grade_level".
+ensureColumn('students', 'grade_level', 'TEXT');
 ensureColumn('teachers', 'hourly_rate_presencial', 'REAL');
 ensureColumn('teachers', 'hourly_rate_online', 'REAL');
 // DEFAULT 10 aqui não é só para professores novos: o SQLite também usa esse valor

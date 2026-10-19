@@ -21,14 +21,27 @@ async function bulkGenerateStudentLogins() {
   );
 }
 
+// Sugestões para o campo "Série": a pessoa escolhe uma da lista ou digita outra coisa.
+const GRADE_LEVEL_SUGGESTIONS = [
+  'Educação Infantil',
+  '1º ano', '2º ano', '3º ano', '4º ano', '5º ano', '6º ano', '7º ano', '8º ano', '9º ano',
+  '1ª série EM', '2ª série EM', '3ª série EM',
+  'Pré-vestibular', 'Ensino superior',
+];
+
 function studentFormModal(existing, onSaved) {
   const s = existing || {};
   const html = `
     <div class="modal-header"><h3>${existing ? 'Editar aluno' : 'Novo aluno'}</h3>
       <button class="modal-close" id="sf-close">&times;</button></div>
     <form id="student-form">
-      <div class="field"><label for="sf-name">Nome do aluno</label>
-        <input type="text" id="sf-name" value="${escapeHtml(s.name || '')}" required></div>
+      <div class="field-row">
+        <div class="field"><label for="sf-name">Nome do aluno</label>
+          <input type="text" id="sf-name" value="${escapeHtml(s.name || '')}" required></div>
+        <div class="field"><label for="sf-grade">Série</label>
+          <input type="text" id="sf-grade" value="${escapeHtml(s.grade_level || '')}" list="sf-grade-options" maxlength="40" autocomplete="off" placeholder="Ex.: 6º ano, 2ª série EM">
+          <datalist id="sf-grade-options">${GRADE_LEVEL_SUGGESTIONS.map(g => `<option value="${escapeHtml(g)}"></option>`).join('')}</datalist></div>
+      </div>
       <div class="field-row">
         <div class="field"><label for="sf-phone">Telefone do aluno</label>
           <input type="tel" id="sf-phone" value="${escapeHtml(s.phone || '')}"></div>
@@ -78,6 +91,7 @@ function studentFormModal(existing, onSaved) {
     errEl.classList.add('hidden');
     const payload = {
       name: backdrop.querySelector('#sf-name').value.trim(),
+      grade_level: backdrop.querySelector('#sf-grade').value.trim(),
       phone: backdrop.querySelector('#sf-phone').value.trim(),
       email: backdrop.querySelector('#sf-email').value.trim(),
       address: backdrop.querySelector('#sf-address').value.trim(),
@@ -105,7 +119,7 @@ Pages.studentsList = async function (root, opts) {
     <div class="page-header">
       <div><div class="eyebrow">Cadastro</div><h1>Alunos</h1>
         <p class="subtitle">Cadastre alunos e acompanhe dados, aulas e notas de cada um.</p></div>
-      <div class="flex gap-10">
+      <div class="flex gap-10 wrap">
         <button class="btn btn-outline" id="bulk-gen-btn">Gerar usuários e senhas para todos</button>
         <button class="btn btn-accent" id="add-student-btn">+ Cadastrar aluno</button>
       </div>
@@ -137,11 +151,12 @@ Pages.studentsList = async function (root, opts) {
     }
     wrap.innerHTML = `
       <div class="table-wrap"><table>
-        <thead><tr><th>Nome</th><th>Responsável</th><th>Telefone</th><th>Pagamento</th><th>Acesso</th></tr></thead>
+        <thead><tr><th>Nome</th><th>Série</th><th>Responsável</th><th>Telefone</th><th>Pagamento</th><th>Acesso</th></tr></thead>
         <tbody>
           ${students.map(s => `
             <tr class="row-link" data-id="${s.id}">
               <td><strong>${escapeHtml(s.name)}</strong></td>
+              <td style="white-space:nowrap;">${escapeHtml(s.grade_level || '—')}</td>
               <td>${escapeHtml(s.guardian_name || '—')}</td>
               <td>${escapeHtml(s.phone || s.guardian_phone || '—')}</td>
               <td>${s.monthly_payment ? `<span class="badge badge-pending">Mensal</span>` : `<span class="badge badge-neutral">Por aula</span>`}</td>
@@ -230,6 +245,7 @@ Pages.studentDetail = async function (root, id) {
       <div class="card">
         <div class="card-header"><h2>Dados cadastrais</h2>
           <button class="btn btn-outline btn-sm" id="edit-student-btn">Editar</button></div>
+        <div><div class="text-sm muted">Série</div><p style="overflow-wrap:anywhere; word-break:break-word;">${escapeHtml(student.grade_level || '—')}</p></div>
         <div class="field-row">
           <div><div class="text-sm muted">Telefone</div><p>${escapeHtml(student.phone || '—')}</p></div>
           <div><div class="text-sm muted">E-mail</div><p>${escapeHtml(student.email || '—')}</p></div>

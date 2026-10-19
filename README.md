@@ -1,6 +1,8 @@
 # Olimais — Sistema de Gestão
 
 Sistema interno de gestão para o seu reforço escolar: cadastro de alunos e professores,
+um controle de interessados (os pais que pediram informações e ainda não agendaram aula),
+um banco de talentos com os potenciais professores que você quer guardar para o futuro,
 agendamento de aulas com calendário, materiais de aula compartilhados entre professores
 e alunos, e controle de pagamentos (a receber dos alunos e a pagar aos professores,
 quinzenalmente).
@@ -203,7 +205,10 @@ dados em mãos, independente dela.
 **Atenção — os arquivos dos Materiais não entram em nenhum desses dois backups.** O botão
 "Baixar backup dos dados" salva só o banco (que inclui a *lista* de materiais, mas não os
 arquivos em si), e o backup de volume da Railway não existe no plano Hobby. O que fazer a
-respeito está na seção 6, em "Backup dos arquivos".
+respeito está na seção 6, em "Backup dos arquivos". Já os **currículos do Banco de talentos**
+ficam dentro do próprio banco de dados, então **entram** no "Baixar backup dos dados" (o
+arquivo de backup fica um pouco maior por causa deles — veja a seção 7). Os cadastros do
+**Controle de interessados** também ficam no banco e entram no backup (seção 8).
 
 **Minha recomendação prática**: uma vez por semana (ou depois de um dia de muito
 cadastro novo), clique em "Baixar backup dos dados" e salve o arquivo num lugar
@@ -219,7 +224,7 @@ possível por um terminal (Shell) no painel da Railway, substituindo o arquivo
 
 ## 5. Um tour rápido pelas funcionalidades
 
-- **Alunos** — cadastro completo (nome, endereço, responsáveis, telefone). A caixa
+- **Alunos** — cadastro completo (nome, série, endereço, responsáveis, telefone). A caixa
   "Pagamento mensal" faz o aluno aparecer em **Pagamentos → Pagamentos mensais** em
   vez de na lista de cobrança aula a aula — as aulas dele continuam no calendário
   normalmente. A mensalidade **não** é um valor digitado: é sempre o **total das aulas do
@@ -231,8 +236,21 @@ possível por um terminal (Shell) no painel da Railway, substituindo o arquivo
   disciplina, professor, e o link quando a aula é online), "Materiais" (os arquivos e links
   que os professores compartilharam com ele, e onde ele também pode enviar — veja a seção
   6) e "Feedbacks" (tudo que os professores já escreveram sobre ele, de forma só de
-  leitura — quem escreve é sempre o professor). Na ficha do aluno: dados, calendário de
+  leitura — quem escreve é sempre o professor). No alto da tela, em qualquer aba, fica o
+  botão **"Manual do aluno"**, que abre o guia em PDF de como usar a área (veja "Manual da
+  Área do Aluno (PDF)", mais abaixo). Na ficha do aluno: dados, calendário de
   aulas, notas, observações e materiais.
+
+  **Série do aluno**: campo opcional logo abaixo do nome, no cadastro (ex.: "6º ano",
+  "2ª série EM"). É um texto livre de até 40 caracteres: o campo sugere as opções mais
+  comuns (Educação Infantil, 1º ao 9º ano, 1ª a 3ª série EM, Pré-vestibular e Ensino
+  superior), mas dá para digitar qualquer outra coisa. Aparece na lista de Alunos (coluna
+  "Série") e no topo de "Dados cadastrais" da ficha. Quem já estava cadastrado fica com
+  "—" até você preencher (Alunos → abrir o aluno → Editar). A série **não** muda sozinha
+  na virada do ano: quando o aluno mudar de série, é só editar o cadastro. A busca da
+  lista continua sendo só por nome, e apenas a secretaria vê e altera a série (ela não
+  aparece nas áreas de professores e alunos). No banco de dados, a série é a coluna
+  `grade_level` da tabela `students` (a tabela `grades` guarda as **notas**, não a série).
 
   **Gerar login para todos os alunos de uma vez**: na lista de Alunos, o botão
   **"Gerar usuários e senhas para todos"** cria, para cada aluno cadastrado, um usuário
@@ -248,7 +266,22 @@ possível por um terminal (Shell) no painel da Railway, substituindo o arquivo
   (por isso ele some das listas em vez de ser apagado do banco), mas o **login é
   liberado** — usuário/e-mail e senha deixam de existir, e você pode cadastrar outra
   pessoa com o mesmo usuário ou e-mail sem problema.
-- **Professores** — cadastro com disciplinas e PIX, com busca por nome na lista. Tem
+- **Interessados** — página própria no menu (logo abaixo de Alunos), **só para a administração**:
+  o controle dos pais e responsáveis que entram em contato, perguntam sobre as aulas e ainda não
+  agendam nada, para você retomar a conversa mais tarde. Cada interessado guarda o nome do
+  responsável, telefone/WhatsApp, e-mail, nome e série do aluno, disciplinas e modalidade de
+  interesse, como conheceu a Olimais, a **situação** (Novo, Em conversa, Retornar depois, Virou
+  aluno ou Sem interesse), a data do primeiro contato, uma **data de retorno** e as suas
+  **observações**. Só o nome é obrigatório. A lista tem busca (nome, telefone, aluno,
+  observações, disciplina…) e filtros por situação e por disciplina, e avisa **Hoje** ou
+  **Atrasado** quando chega a data de retorno de um caso em aberto; a ficha deixa trocar a
+  situação e editar as observações na hora. Professores e alunos não veem nada disso. Campos,
+  backup e cuidados com os dados pessoais: seção 8.
+- **Professores** — cadastro com disciplinas e PIX. Na lista você procura **por nome ou
+  por disciplina**: digite na caixa de busca (ela acha o nome e também a disciplina, sem
+  se importar com acento ou maiúscula — "matematica" acha quem dá Matemática) e/ou
+  escolha uma disciplina na caixa **"Todas as disciplinas"**, ao lado. As duas funcionam
+  juntas e, quando há filtro, a lista mostra quantos professores foram encontrados. Tem
   também dois campos de **valor por hora** (presencial e online) e um de **transporte**,
   todos visíveis **só para você** — o professor não vê esses valores, nem pela própria
   área dele (só vê o total certo que vai receber, já com tudo somado). O valor/hora
@@ -293,6 +326,17 @@ possível por um terminal (Shell) no painel da Railway, substituindo o arquivo
   quadradinhos. Isso é só uma anotação; como pedido, não bloqueia nem avisa nada no
   agendamento. Na ficha do professor (lado da secretaria): dados, alunos e feedback,
   disponibilidade, calendário de aulas e o total de horas/valor de cada quinzena.
+- **Banco de talentos** — página própria no menu, **só para a administração**: o lugar para
+  guardar os potenciais professores que você talvez queira contratar no futuro. Cada talento
+  tem praticamente os mesmos dados de um professor — nome, telefone, e-mail, endereço,
+  disciplinas que poderia lecionar, valor por hora que pretende receber (presencial e online)
+  e disponibilidade —, mais o **currículo** (um arquivo anexado) e um campo de
+  **observações** para as suas anotações (como conheceu a pessoa, impressões da entrevista…).
+  Login, senha, PIX e transporte ficam de fora, porque só fazem sentido quando a pessoa é
+  contratada. A lista tem busca (nome, disciplina, contato, observações) e filtro por
+  disciplina; a ficha mostra tudo, abre ou baixa o currículo e deixa editar as observações na
+  hora. Professores e alunos não veem nada disso. Limites, tipos de arquivo, backup e cuidados
+  com os dados pessoais: seção 7.
 - **Feedbacks** — uma aba própria no menu, só para a secretaria, para consultar o
   feedback já registrado sem precisar entrar na ficha de cada professor. Alterna entre
   "Por aluno" (busca um aluno e vê o feedback de todos os professores dele, cada item
@@ -454,6 +498,29 @@ O calendário é o mesmo em todo lugar: **Agendamento**, ficha do **aluno** e do
   os detalhes. Tocar num dia **sem** aula abre o agendamento de uma nova aula (só no painel
   de administração; nas áreas do aluno e do professor não acontece nada).
 
+### Manual da Área do Aluno (PDF)
+
+No alto da área do aluno (em qualquer aba) há o botão **"Manual do aluno"**: ele abre, numa
+nova aba, o guia em PDF de como usar a área — acompanhar as aulas, ver os detalhes e o link
+da aula, enviar e receber materiais.
+
+- **Só aluno abre.** Professores, secretaria e visitantes não veem o botão; se alguém
+  digitar o endereço do manual mesmo assim, professor e secretaria recebem um aviso ("o
+  manual é exclusivo para alunos") e quem não entrou no portal vê um aviso com o link para
+  entrar. O PDF **não fica numa pasta pública** do site: ele só sai depois de o portal conferir que
+  quem está pedindo é um aluno logado (e ativo — se você excluir o aluno, ele perde o
+  acesso na hora).
+- **Onde está o arquivo:** `server/assets/manual-aluno.pdf`, junto com o resto do projeto (não
+  fica no volume de dados). Não confunda com `public/assets/`, que é a pasta pública do logo.
+- **Para trocar o manual por uma versão nova:** salve o PDF novo com **exatamente** o nome
+  `manual-aluno.pdf`, coloque-o no lugar do antigo na pasta `server/assets/` do repositório
+  do portal (no GitHub: abra a pasta `server/assets`, **Add file → Upload files**, arraste o
+  PDF e clique em **Commit changes**) e espere o Railway publicar. Mais nada muda, e quem já
+  abriu o manual antes recebe a versão nova automaticamente. O GitHub pelo navegador aceita
+  arquivos de até 25 MB.
+- **Tamanho:** o manual atual tem cerca de 10 MB. Num celular com internet fraca, um PDF
+  menor abre mais rápido — se for refazer o manual, vale exportar numa qualidade/tamanho menor.
+
 ---
 
 ## 6. Materiais de aula — como funciona, limites e como ajustar
@@ -587,7 +654,228 @@ no volume da Railway, e o backup de volume da Railway não funciona no plano Hob
 
 ---
 
-## 7. Solução de problemas
+## 7. Banco de talentos — como funciona, limites e cuidados
+
+**O que é.** Uma lista privada das pessoas que você talvez queira chamar para dar aula no
+futuro, com os dados de contato, o currículo e as suas anotações. Aparece no menu da
+secretaria como **Banco de talentos** (logo abaixo de Professores) e é **exclusivo da
+administração**: não existe nenhuma tela, aba ou link disso na área do professor ou do aluno,
+e o servidor confere o login de administração em toda chamada — quem não for administrador
+não consegue ver nada, mesmo digitando o endereço na mão.
+
+### O que dá para guardar
+
+| Campo | Observação |
+|---|---|
+| **Nome** | obrigatório (até 120 caracteres) |
+| **Telefone**, **E-mail**, **Endereço** | opcionais; na ficha, o telefone e o e-mail viram links (ligar / escrever) |
+| **Disciplinas que poderia lecionar** | a mesma lista de disciplinas dos professores; dá para criar uma disciplina nova ali mesmo |
+| **Valor por hora que pretende receber** | presencial e online; é só uma referência para você — não entra em nenhuma conta nem preenche o agendamento sozinho |
+| **Disponibilidade** | a mesma grade de Segunda a Domingo, das 8h às 20h, dos professores; é só uma anotação |
+| **Currículo** | um arquivo por talento (veja "Currículo — limites e tipos") |
+| **Observações** | texto livre de até 5.000 caracteres: como conheceu a pessoa, impressões da entrevista, o que combinaram… |
+
+**Ficam de fora de propósito:** login e senha, PIX e transporte. Só fazem sentido quando a
+pessoa é contratada, e assim você não guarda dados de acesso nem de pagamento de quem ainda
+não trabalha com você.
+
+### Como usar
+
+1. No menu, **Banco de talentos** → **+ Cadastrar talento**. Só o nome é obrigatório; o resto
+   você preenche quando tiver. O currículo pode ser anexado já no cadastro ou depois, pela ficha.
+2. A **lista** mostra nome, disciplinas, contato, valor/hora pretendido e se há currículo. A
+   caixa de busca procura em nome, disciplinas, telefone, e-mail, endereço, observações e no
+   nome do arquivo do currículo, sem diferenciar maiúsculas nem acentos ("jose" acha "José");
+   ao lado há um filtro por disciplina. Clique numa linha para abrir a ficha.
+3. A **ficha** reúne os dados cadastrais (botão **Editar**), o currículo (**Abrir**,
+   **Baixar**, **Trocar**, **Remover currículo**), as observações (**Editar** → **Salvar
+   observações**, sem abrir o formulário) e a disponibilidade.
+4. **Remover**, no alto da ficha, apaga de vez o talento, as observações e o currículo, depois
+   de uma confirmação. Não existe lixeira: não dá para desfazer.
+5. **Para contratar:** o talento não vira professor sozinho. Vá em **Professores** →
+   **+ Cadastrar professor** e copie os dados da ficha (depois, se quiser, remova o talento do
+   banco). Se esse vaivém virar rotina, dá para pedir um botão "Contratar" que já leve os dados.
+
+### Currículo — limites e tipos
+
+- **Um currículo por talento.** Anexar outro **substitui** o anterior (o antigo é apagado).
+- **Limites:** **5 MB por currículo** e **200 MB no total** (todos os currículos somados). A tela
+  avisa **antes** de enviar quando o arquivo é grande demais ou de um tipo não aceito, e explica
+  o que fazer (comprimir o arquivo, exportar de novo, converter).
+- **Aceitos:** PDF, Word (.doc e .docx), .odt, .rtf e imagens (JPG, JPEG, PNG, WEBP). Como nos
+  Materiais, o portal confere o **conteúdo** do arquivo e não só o nome: um programa renomeado
+  para `.pdf` é recusado.
+- **Recusados de propósito:** tudo que um navegador consegue executar (.html, .svg, .js, .exe),
+  compactados (.zip, .rar), fotos HEIC do iPhone (converter para JPG) e arquivos do Pages
+  (exportar como PDF ou Word).
+- **Abrir ou baixar:** PDF e imagens podem abrir direto no navegador (botão **Abrir**); os
+  demais tipos sempre baixam. O arquivo só sai depois de o portal conferir o login de
+  administração, nunca fica numa pasta pública e é entregue com cabeçalhos que impedem o
+  navegador de tratá-lo como página.
+- **Mudar os limites:** variáveis de ambiente no serviço (Railway → Variables), em MB
+  (1 MB = 1.000.000 bytes): `TALENTS_CV_MAX_MB` (padrão 5) e `TALENTS_CV_TOTAL_MB` (padrão 200).
+  Vazio, inválido ou `0` volta ao padrão. Depois de salvar a variável, aplique a mudança na
+  Railway (o botão **Deploy** que ela mostra) para o serviço reiniciar com o valor novo. Não
+  exagere nos números: o currículo mora dentro do banco de dados (veja a seguir).
+
+### Onde ficam os currículos e o backup
+
+Diferente dos arquivos dos Materiais, que ficam numa pasta do volume, o currículo é guardado
+**dentro do próprio banco de dados** (tabela `talent_cvs`). Consequências:
+
+- **Entra no "Baixar backup dos dados"**, junto com o resto: um único backup protege todo o
+  Banco de talentos, currículos inclusive. Em compensação, o arquivo de backup fica maior (com
+  o teto padrão, até 200 MB a mais) e demora um pouco mais para baixar.
+- Sai junto quando o talento é removido, e nunca sobra um arquivo solto no disco.
+- Divide o volume com o banco e com os Materiais. Com os tetos padrão, o volume de 5 GB do
+  plano Hobby comporta tudo; se você aumentar algum limite, lembre que o espaço é um só.
+
+### Cuidados com os dados pessoais
+
+Os talentos são dados pessoais de pessoas que ainda não trabalham com você (nome, contato,
+endereço, currículo, as suas impressões). Boas práticas simples:
+
+- guarde só o que você realmente usa e **remova o talento quando ele deixar de ser uma opção**
+  (**Remover** apaga o cadastro e o currículo de vez);
+- as cópias do "Baixar backup dos dados" feitas antes da remoção ainda contêm essas
+  informações — se alguém pedir para ser apagado, vale também descartar os backups antigos;
+- pela LGPD, a pessoa pode pedir para ver ou apagar o que você guardou sobre ela, então escreva
+  as observações com isso em mente;
+- se a política de privacidade do site não menciona candidatos a professor, vale incluir (ela
+  ainda é só um modelo, e o ideal é um advogado revisar — eu não sou advogado).
+
+### Decisões que tomei por você (e como mudar cada uma)
+
+1. **Só a administração vê.** As regras de acesso ficam todas num lugar só, o arquivo comentado
+   `server/routes/talents.js`.
+2. **Um currículo por talento**, guardado no banco (e não numa pasta), pelos motivos acima.
+3. **Sem "status" do candidato** (entrevistado, aprovado, descartado…): as observações cobrem
+   isso. Se quiser um campo de status com filtro na lista, dá para acrescentar.
+4. **Remover é definitivo** (com confirmação): não há lixeira.
+5. **Login, PIX e transporte ficam de fora**, como explicado acima.
+
+### Problemas comuns
+
+- **"O espaço reservado aos currículos (200 MB) está cheio"** — remova currículos que não usa
+  mais (ficha do talento → **Remover currículo**) ou aumente `TALENTS_CV_TOTAL_MB`.
+- **"Grande demais … o máximo é 5 MB"** — exporte o PDF de novo com qualidade menor, comprima
+  as imagens ou aumente `TALENTS_CV_MAX_MB`.
+- **"O conteúdo deste arquivo não confere com o tipo dele"** — o arquivo está corrompido ou foi
+  renomeado (por exemplo, uma imagem chamada `.pdf`). Abra e salve de novo no formato certo.
+- **O talento foi salvo, mas o currículo não subiu** — acontece quando a internet cai ou o
+  servidor recusa o arquivo no meio do cadastro. Os dados **não se perdem**: você cai na ficha
+  do talento, com o motivo numa mensagem em vermelho, e é só anexar o currículo de novo ali.
+- **A busca não acha uma pessoa** — ela procura em nome, disciplinas, telefone, e-mail,
+  endereço, observações e nome do arquivo do currículo (não *dentro* do currículo) e usa só os
+  100 primeiros caracteres do que for digitado.
+- **Depois de publicar a atualização:** as tabelas novas (`talents`, `talent_subjects` e
+  `talent_cvs`) são criadas sozinhas na primeira vez que o servidor liga; nada do que já existia
+  é alterado. Se precisar voltar para a versão anterior do portal, é seguro: as tabelas novas
+  ficam ali, sem uso, e tudo volta a funcionar como antes.
+
+---
+
+## 8. Controle de interessados — como funciona e cuidados
+
+**O que é.** Uma lista privada dos pais e responsáveis que entraram em contato, perguntaram sobre
+as aulas e, pelo menos nesse primeiro contato, não agendaram nada. Serve para você não perder
+esses contatos e poder retomá-los depois (começo de semestre, época de prova, uma promoção…).
+Aparece no menu da secretaria como **Interessados** (logo abaixo de Alunos) e é **exclusivo da
+administração**: não existe nenhuma tela, aba ou link disso na área do professor ou do aluno, e o
+servidor confere o login de administração em toda chamada — quem não for administrador não
+consegue ver nada, mesmo digitando o endereço na mão.
+
+### O que dá para guardar
+
+| Campo | Observação |
+|---|---|
+| **Nome do responsável** | o **único obrigatório** (até 120 caracteres) |
+| **Telefone / WhatsApp**, **E-mail** | opcionais; na ficha, o telefone e o e-mail viram links (ligar / escrever) |
+| **Nome do aluno** e **Série** | opcionais; a série traz as mesmas sugestões do cadastro de alunos e aceita outro texto |
+| **Disciplinas de interesse** | a mesma lista de disciplinas do sistema; dá para criar uma disciplina nova ali mesmo |
+| **Modalidade de interesse** | Presencial, Online ou Tanto faz |
+| **Como conheceu a Olimais** | Instagram, Site, Google, Indicação, WhatsApp, Facebook ou Outro |
+| **Situação** | Novo (o padrão), Em conversa, Retornar depois, Virou aluno ou Sem interesse |
+| **Data do primeiro contato** | já vem com o dia de hoje; dá para mudar ou apagar |
+| **Retornar em** | opcional: o dia em que você quer voltar a falar com a pessoa |
+| **Observações** | texto livre de até 5.000 caracteres: o que perguntou, o que achou do valor, o que combinaram… |
+
+### Como usar
+
+1. No menu, **Interessados** → **+ Cadastrar interessado**. Só o nome é obrigatório; o resto você
+   preenche com o que souber (e completa depois, pela ficha).
+2. A **lista** mostra, do contato mais recente para o mais antigo, o responsável (com aluno e
+   série embaixo), o contato, as disciplinas, a situação, a data do primeiro contato e a data de
+   retorno. A caixa de busca procura em nome, telefone, e-mail, aluno, série, observações,
+   disciplinas, situação, modalidade e origem, sem diferenciar maiúsculas nem acentos ("luiza"
+   acha "Luíza"); um telefone digitado só com números também funciona. Ao lado há filtros por
+   **situação** e por **disciplina**, que valem junto com a busca. Clique numa linha para abrir a ficha.
+3. **Retorno:** quando a data de retorno de um caso em aberto (Novo, Em conversa ou Retornar
+   depois) é hoje, a lista mostra **Hoje**; se já passou, mostra **Atrasado**. Casos encerrados
+   (Virou aluno, Sem interesse) não geram aviso, mesmo com data. O sistema só **mostra** isso:
+   não manda mensagem, e-mail nem lembrete sozinho, e o Painel não mostra esses avisos.
+4. A **ficha** reúne o contato e o interesse (**Editar**), o acompanhamento (a **situação** muda ali
+   mesmo, numa caixa de escolha) e as observações (**Editar** → **Salvar observações**, sem abrir
+   o formulário).
+5. **Remover**, no alto da ficha, apaga de vez o cadastro, depois de uma confirmação. Não existe
+   lixeira: não dá para desfazer.
+6. **Quando o interessado vira aluno:** troque a situação para **Virou aluno** e cadastre o aluno
+   normalmente em **Alunos**. O sistema não copia os dados sozinho; se esse vaivém virar rotina,
+   dá para pedir um botão "Cadastrar como aluno" que já leve os dados.
+
+### Onde ficam os dados e o backup
+
+Ficam no próprio banco de dados (tabelas `leads` e `lead_subjects`), junto com o resto. Por isso
+entram no **"Baixar backup dos dados"** e não ocupam nenhuma pasta à parte. O volume de dados é
+pequeno (texto), então não há limite de quantidade nem mudança de espaço a considerar.
+
+### Cuidados com os dados pessoais
+
+Os interessados são dados pessoais de pais e de crianças (nome, telefone, e-mail, nome e série do
+aluno) de gente que ainda não é sua cliente. Boas práticas simples:
+
+- guarde só o que você realmente usa e **remova o cadastro de quem pediu para sair ou deixou de
+  fazer sentido** (**Remover** apaga de vez);
+- ao retomar o contato, identifique-se e diga de onde conhece a pessoa; se ela pedir para não ser
+  mais procurada, marque **Sem interesse** (ou remova) e não procure de novo;
+- as cópias do "Baixar backup dos dados" feitas antes de uma remoção ainda contêm essas
+  informações — se alguém pedir para ser apagado, vale também descartar os backups antigos;
+- pela LGPD, a pessoa pode pedir para ver ou apagar o que você guardou sobre ela, então escreva as
+  observações com isso em mente;
+- se a política de privacidade do site não menciona o contato com interessados, vale incluir (ela
+  ainda é só um modelo, e o ideal é um advogado revisar — eu não sou advogado).
+
+### Decisões que tomei por você (e como mudar cada uma)
+
+1. **Só a administração vê.** As regras de acesso ficam todas num lugar só, o arquivo comentado
+   `server/routes/leads.js`.
+2. **Cinco situações fixas** (Novo, Em conversa, Retornar depois, Virou aluno, Sem interesse). A
+   lista fica em `server/leads.js` (`STATUSES`); trocar nomes ou acrescentar outra é rápido de
+   pedir. Modalidades e origens também são listas fixas (`MODALITIES` e `SOURCES`, no mesmo arquivo).
+3. **O aviso de retorno aparece só na lista e na ficha**, sem aviso no Painel, por e-mail ou por
+   WhatsApp. Se quiser um lembrete mais ativo (por exemplo, "retornos de hoje" no Painel), dá para pedir.
+4. **Remover é definitivo** (com confirmação): não há lixeira.
+5. **Sem verificação de repetidos:** se a mesma pessoa for cadastrada duas vezes, os dois
+   cadastros aparecem (uma busca pelo telefone mostra os dois).
+6. **Não vira aluno sozinho**, como explicado acima.
+
+### Problemas comuns
+
+- **A busca não acha uma pessoa** — ela procura em nome, telefone, e-mail, aluno, série,
+  observações, disciplinas, situação, modalidade e origem (não nas datas) e usa só os 100
+  primeiros caracteres do que for digitado. Confira também se algum filtro de situação ou de
+  disciplina ficou marcado ao lado da busca.
+- **A data do primeiro contato está em branco** — ela já vem preenchida com o dia de hoje em todo
+  cadastro novo; se alguém a apagou, fica em branco (e a lista põe esses casos no fim). Para
+  preencher, **Editar** na ficha.
+- **Depois de publicar a atualização:** as tabelas novas (`leads` e `lead_subjects`) são criadas
+  sozinhas na primeira vez que o servidor liga; nada do que já existia é alterado. Se precisar
+  voltar para a versão anterior do portal, é seguro: as tabelas novas ficam ali, sem uso, e tudo
+  volta a funcionar como antes.
+
+---
+
+## 9. Solução de problemas
 
 - **"Cannot find module 'node:sqlite'" ou erro parecido ao iniciar** — a versão do
   Node em uso é anterior à 22.5. Confira em Settings do serviço (Railway/Render) se dá
@@ -596,6 +884,15 @@ no volume da Railway, e o backup de volume da Railway não funciona no plano Hob
 - **Perdi os dados depois de publicar uma atualização** — o volume/disco persistente
   não foi configurado (passo "d" acima), ou o `DATA_DIR` não bate com o caminho onde
   ele foi montado.
+- **O botão "Manual do aluno" mostra "O manual não está disponível no momento"** — o
+  arquivo `server/assets/manual-aluno.pdf` não está no projeto publicado (foi apagado ou o
+  nome mudou). Suba o PDF de novo com esse nome exato e espere a publicação.
+- **Um aluno diz que o manual "não abriu" no celular** — em alguns celulares Android o PDF
+  é baixado em vez de aparecer na tela: é só abrir o arquivo na notificação ou na pasta
+  Downloads. Se aparecer "Entre na Área do Aluno", a sessão dele expirou: basta entrar de novo.
+- **Não consigo anexar um currículo no Banco de talentos** — a tela explica o motivo (arquivo
+  acima de 5 MB, tipo não aceito, conteúdo que não confere ou espaço de currículos cheio). O que
+  fazer em cada caso está na seção 7, em "Problemas comuns".
 - **Quero trocar meu e-mail ou senha de administrador (e sei a senha atual)** — não
   precisa mexer no banco de dados: clique em **"Minha conta (e-mail / senha)"**, no
   rodapé do menu lateral. Pede a senha atual para confirmar, e deixa trocar o e-mail,
@@ -619,18 +916,24 @@ no volume da Railway, e o backup de volume da Railway não funciona no plano Hob
 
 ---
 
-## 8. Estrutura do projeto
+## 10. Estrutura do projeto
 
 ```
 server/           todo o backend (servidor, banco de dados, regras de negócio, rotas)
   db.js             conexão com o SQLite e criação das tabelas
   links.js          regra dos links (aula online e materiais): sempre https://
   materials.js      arquivos dos materiais: limites, tipos aceitos, gravação e download
+  talents.js        banco de talentos: conferência dos campos, busca e currículo (guardado no banco)
+  leads.js          controle de interessados: conferência dos campos, situações, busca e retorno
   services.js        regras de negócio: quinzenas, conflitos, faturas, recorrência
   auth.js            login/senha/sessão
   router.js          roteador HTTP simples (sem framework)
   routes/            um arquivo por área (alunos, professores, agendamento, pagamentos,
-                     materiais — este com todas as regras de quem pode ver/enviar/apagar)
+                     materiais — este com todas as regras de quem pode ver/enviar/apagar —,
+                     talentos e interessados — só administração — e manual, que entrega o
+                     PDF do manual só para alunos logados)
+  assets/            arquivos entregues só depois do login (hoje: manual-aluno.pdf;
+                     não confundir com public/assets/, que é pública)
   index.js           ponto de entrada — inicia o servidor
 public/            todo o frontend (HTML/CSS/JS puro, sem build)
   index.html         estrutura principal do site (depois do login, para a secretaria)

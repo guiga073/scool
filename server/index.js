@@ -45,6 +45,9 @@ require('./routes/studentPortal').register(router);
 require('./routes/backup').register(router);
 require('./routes/finance').register(router);
 require('./routes/materials').register(router);
+require('./routes/manual').register(router);
+require('./routes/talents').register(router);
+require('./routes/leads').register(router);
 
 // Materiais de aula: prepara a pasta no volume, limpa envios que ficaram pela metade e
 // arquivos sem registro no banco.
