@@ -747,113 +747,12 @@ endereço, currículo, as suas impressões). Boas práticas simples:
 ### Decisões que tomei por você (e como mudar cada uma)
 
 1. **Só a administração vê.** As regras de acesso ficam todas num lugar só, o arquivo comentado
-   `server/routes/talents.js`.
-2. **Um currículo por talento**, guardado no banco (e não numa pasta), pelos motivos acima.
-3. **Sem "status" do candidato** (entrevistado, aprovado, descartado…): as observações cobrem
-   isso. Se quiser um campo de status com filtro na lista, dá para acrescentar.
-4. **Remover é definitivo** (com confirmação): não há lixeira.
-5. **Login, PIX e transporte ficam de fora**, como explicado acima.
-
-### Problemas comuns
-
-- **"O espaço reservado aos currículos (200 MB) está cheio"** — remova currículos que não usa
-  mais (ficha do talento → **Remover currículo**) ou aumente `TALENTS_CV_TOTAL_MB`.
-- **"Grande demais … o máximo é 5 MB"** — exporte o PDF de novo com qualidade menor, comprima
-  as imagens ou aumente `TALENTS_CV_MAX_MB`.
-- **"O conteúdo deste arquivo não confere com o tipo dele"** — o arquivo está corrompido ou foi
-  renomeado (por exemplo, uma imagem chamada `.pdf`). Abra e salve de novo no formato certo.
-- **O talento foi salvo, mas o currículo não subiu** — acontece quando a internet cai ou o
-  servidor recusa o arquivo no meio do cadastro. Os dados **não se perdem**: você cai na ficha
-  do talento, com o motivo numa mensagem em vermelho, e é só anexar o currículo de novo ali.
-- **A busca não acha uma pessoa** — ela procura em nome, disciplinas, telefone, e-mail,
-  endereço, observações e nome do arquivo do currículo (não *dentro* do currículo) e usa só os
-  100 primeiros caracteres do que for digitado.
-- **Depois de publicar a atualização:** as tabelas novas (`talents`, `talent_subjects` e
-  `talent_cvs`) são criadas sozinhas na primeira vez que o servidor liga; nada do que já existia
-  é alterado. Se precisar voltar para a versão anterior do portal, é seguro: as tabelas novas
-  ficam ali, sem uso, e tudo volta a funcionar como antes.
-
----
-
-## 8. Controle de interessados — como funciona e cuidados
-
-**O que é.** Uma lista privada dos pais e responsáveis que entraram em contato, perguntaram sobre
-as aulas e, pelo menos nesse primeiro contato, não agendaram nada. Serve para você não perder
-esses contatos e poder retomá-los depois (começo de semestre, época de prova, uma promoção…).
-Aparece no menu da secretaria como **Interessados** (logo abaixo de Alunos) e é **exclusivo da
-administração**: não existe nenhuma tela, aba ou link disso na área do professor ou do aluno, e o
-servidor confere o login de administração em toda chamada — quem não for administrador não
-consegue ver nada, mesmo digitando o endereço na mão.
-
-### O que dá para guardar
-
-| Campo | Observação |
-|---|---|
-| **Nome do responsável** | o **único obrigatório** (até 120 caracteres) |
-| **Telefone / WhatsApp**, **E-mail** | opcionais; na ficha, o telefone e o e-mail viram links (ligar / escrever) |
-| **Nome do aluno** e **Série** | opcionais; a série traz as mesmas sugestões do cadastro de alunos e aceita outro texto |
-| **Disciplinas de interesse** | a mesma lista de disciplinas do sistema; dá para criar uma disciplina nova ali mesmo |
-| **Modalidade de interesse** | Presencial, Online ou Tanto faz |
-| **Como conheceu a Olimais** | Instagram, Site, Google, Indicação, WhatsApp, Facebook ou Outro |
-| **Situação** | Novo (o padrão), Em conversa, Retornar depois, Virou aluno ou Sem interesse |
-| **Data do primeiro contato** | já vem com o dia de hoje; dá para mudar ou apagar |
-| **Retornar em** | opcional: o dia em que você quer voltar a falar com a pessoa |
-| **Observações** | texto livre de até 5.000 caracteres: o que perguntou, o que achou do valor, o que combinaram… |
-
-### Como usar
-
-1. No menu, **Interessados** → **+ Cadastrar interessado**. Só o nome é obrigatório; o resto você
-   preenche com o que souber (e completa depois, pela ficha).
-2. A **lista** mostra, do contato mais recente para o mais antigo, o responsável (com aluno e
-   série embaixo), o contato, as disciplinas, a situação, a data do primeiro contato e a data de
-   retorno. A caixa de busca procura em nome, telefone, e-mail, aluno, série, observações,
-   disciplinas, situação, modalidade e origem, sem diferenciar maiúsculas nem acentos ("luiza"
-   acha "Luíza"); um telefone digitado só com números também funciona. Ao lado há filtros por
-   **situação** e por **disciplina**, que valem junto com a busca. Clique numa linha para abrir a ficha.
-3. **Retorno:** quando a data de retorno de um caso em aberto (Novo, Em conversa ou Retornar
-   depois) é hoje, a lista mostra **Hoje**; se já passou, mostra **Atrasado**. Casos encerrados
-   (Virou aluno, Sem interesse) não geram aviso, mesmo com data. O sistema só **mostra** isso:
-   não manda mensagem, e-mail nem lembrete sozinho, e o Painel não mostra esses avisos.
-4. A **ficha** reúne o contato e o interesse (**Editar**), o acompanhamento (a **situação** muda ali
-   mesmo, numa caixa de escolha) e as observações (**Editar** → **Salvar observações**, sem abrir
-   o formulário).
-5. **Remover**, no alto da ficha, apaga de vez o cadastro, depois de uma confirmação. Não existe
-   lixeira: não dá para desfazer.
-6. **Quando o interessado vira aluno:** troque a situação para **Virou aluno** e cadastre o aluno
-   normalmente em **Alunos**. O sistema não copia os dados sozinho; se esse vaivém virar rotina,
-   dá para pedir um botão "Cadastrar como aluno" que já leve os dados.
-
-### Onde ficam os dados e o backup
-
-Ficam no próprio banco de dados (tabelas `leads` e `lead_subjects`), junto com o resto. Por isso
-entram no **"Baixar backup dos dados"** e não ocupam nenhuma pasta à parte. O volume de dados é
-pequeno (texto), então não há limite de quantidade nem mudança de espaço a considerar.
-
-### Cuidados com os dados pessoais
-
-Os interessados são dados pessoais de pais e de crianças (nome, telefone, e-mail, nome e série do
-aluno) de gente que ainda não é sua cliente. Boas práticas simples:
-
-- guarde só o que você realmente usa e **remova o cadastro de quem pediu para sair ou deixou de
-  fazer sentido** (**Remover** apaga de vez);
-- ao retomar o contato, identifique-se e diga de onde conhece a pessoa; se ela pedir para não ser
-  mais procurada, marque **Sem interesse** (ou remova) e não procure de novo;
-- as cópias do "Baixar backup dos dados" feitas antes de uma remoção ainda contêm essas
-  informações — se alguém pedir para ser apagado, vale também descartar os backups antigos;
-- pela LGPD, a pessoa pode pedir para ver ou apagar o que você guardou sobre ela, então escreva as
-  observações com isso em mente;
-- se a política de privacidade do site não menciona o contato com interessados, vale incluir (ela
-  ainda é só um modelo, e o ideal é um advogado revisar — eu não sou advogado).
-
-### Decisões que tomei por você (e como mudar cada uma)
-
-1. **Só a administração vê.** As regras de acesso ficam todas num lugar só, o arquivo comentado
    `server/routes/leads.js`.
-2. **Cinco situações fixas** (Novo, Em conversa, Retornar depois, Virou aluno, Sem interesse). A
-   lista fica em `server/leads.js` (`STATUSES`); trocar nomes ou acrescentar outra é rápido de
-   pedir. Modalidades e origens também são listas fixas (`MODALITIES` e `SOURCES`, no mesmo arquivo).
-3. **O aviso de retorno aparece só na lista e na ficha**, sem aviso no Painel, por e-mail ou por
-   WhatsApp. Se quiser um lembrete mais ativo (por exemplo, "retornos de hoje" no Painel), dá para pedir.
+2. **Três motivos fixos** (Valor, Interno da Olimais, Outros). A lista fica em `server/leads.js`
+   (`LOST_REASONS`); trocar nomes ou acrescentar outro é rápido de pedir. As origens também são uma lista
+   fixa (`SOURCES`, no mesmo arquivo).
+3. **O motivo é opcional e independe de qualquer "situação"** (a situação foi removida): você o preenche quando a
+   pessoa não fechar. Se quiser um campo de texto só para "Outros", dá para pedir.
 4. **Remover é definitivo** (com confirmação): não há lixeira.
 5. **Sem verificação de repetidos:** se a mesma pessoa for cadastrada duas vezes, os dois
    cadastros aparecem (uma busca pelo telefone mostra os dois).
@@ -861,17 +760,15 @@ aluno) de gente que ainda não é sua cliente. Boas práticas simples:
 
 ### Problemas comuns
 
-- **A busca não acha uma pessoa** — ela procura em nome, telefone, e-mail, aluno, série,
-  observações, disciplinas, situação, modalidade e origem (não nas datas) e usa só os 100
-  primeiros caracteres do que for digitado. Confira também se algum filtro de situação ou de
-  disciplina ficou marcado ao lado da busca.
-- **A data do primeiro contato está em branco** — ela já vem preenchida com o dia de hoje em todo
-  cadastro novo; se alguém a apagou, fica em branco (e a lista põe esses casos no fim). Para
-  preencher, **Editar** na ficha.
-- **Depois de publicar a atualização:** as tabelas novas (`leads` e `lead_subjects`) são criadas
-  sozinhas na primeira vez que o servidor liga; nada do que já existia é alterado. Se precisar
-  voltar para a versão anterior do portal, é seguro: as tabelas novas ficam ali, sem uso, e tudo
-  volta a funcionar como antes.
+- **A busca não acha uma pessoa** — ela procura em nome, telefone, aluno, observações, disciplinas, motivo e
+  origem (não nas datas) e usa só os 100 primeiros caracteres do que for digitado. Confira também se algum
+  filtro de motivo ou de disciplina ficou marcado ao lado da busca.
+- **A data do último contato está em branco** — ela já vem preenchida com o dia de hoje em todo cadastro novo;
+  se alguém a apagou, fica em branco (e a lista põe esses casos no fim). Para preencher, **Editar** na ficha
+  ou **Registrar contato hoje**.
+- **Depois de publicar a atualização:** as colunas novas são criadas sozinhas na primeira vez que o servidor
+  liga e nada é apagado. Se precisar voltar para a versão anterior do portal, é seguro: as colunas antigas
+  continuam ali, e o que você cadastrou com a versão nova (motivo e último contato) só deixa de aparecer.
 
 ---
 

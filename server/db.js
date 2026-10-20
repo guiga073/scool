@@ -317,6 +317,17 @@ db.exec('CREATE INDEX IF NOT EXISTS idx_classes_confirmation ON classes(confirma
 // Quem recebe o aviso de confirmação: 'responsavel' (padrão) ou, em casos específicos, o próprio 'aluno'.
 ensureColumn('students', 'confirmer', "TEXT NOT NULL DEFAULT 'responsavel'");
 
+// Controle de interessados (v15): "data do último contato" e "motivo de não fechamento" substituem
+// situação, 1º contato, retorno, e-mail, série e modalidade (essas colunas antigas continuam no banco, com o que
+// já estava gravado, mas o sistema não as mostra nem grava mais). Na primeira vez, a data do último contato
+// começa com a data do primeiro contato que já existia (ou o dia do cadastro).
+ensureColumn('leads', 'last_contact_date', 'TEXT');
+ensureColumn('leads', 'lost_reason', 'TEXT');
+if (!db.prepare("SELECT 1 FROM settings WHERE key = 'leads.v15_migrated'").get()) {
+  db.exec("UPDATE leads SET last_contact_date = COALESCE(contact_date, substr(created_at, 1, 10)) WHERE last_contact_date IS NULL");
+  db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('leads.v15_migrated', '1')").run();
+}
+
 
 // Links de aula antigos: antes o link era salvo exatamente como digitado, e um link sem
 // "https://" (ex.: "meet.google.com/abc") não abre pelo link da aula — o navegador

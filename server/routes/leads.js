@@ -24,7 +24,7 @@ function register(router) {
     sendJson(res, 200, leads.config());
   });
 
-  // Lista. Filtros opcionais: ?search=texto, ?status=código e ?subjectId=código.
+  // Lista. Filtros opcionais: ?search=texto, ?reason=código (valor, interno, outros ou nenhum) e ?subjectId=código.
   router.get('/api/leads', async (req, res) => {
     requireAuth(req);
     sendJson(res, 200, leads.list(req.query));

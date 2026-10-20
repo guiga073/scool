@@ -2,21 +2,12 @@
 // Controle de interessados (só a administração vê): pais e responsáveis que pediram informações e ainda
 // não agendaram aula. A lista, a ficha de cada interessado e o formulário de cadastro/edição ficam aqui.
 // Os dados ficam no servidor (server/leads.js), que confere o login de administrador a cada pedido e
-// também é quem diz quais são as situações, modalidades e origens possíveis (GET /api/leads/config).
+// também é quem diz quais são os motivos de não fechamento e as origens possíveis (GET /api/leads/config).
 
 window.Pages = window.Pages || {};
 
 (function () {
   const NOTES_MAX = 5000;
-
-  // Cor de cada situação (só as cores que o sistema já tem; "Virou aluno" ganha o azul cheio).
-  const STATUS_BADGE = {
-    novo: 'badge-pending',
-    em_conversa: 'badge-confirmed',
-    retornar: 'badge-neutral',
-    virou_aluno: 'badge-won',
-    sem_interesse: 'badge-danger',
-  };
 
   function labelOf(options, key) {
     const found = options.find((o) => o.key === key);
@@ -36,18 +27,7 @@ window.Pages = window.Pages || {};
     return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
   }
 
-  function statusBadge(config, key) {
-    return `<span class="badge ${STATUS_BADGE[key] || 'badge-neutral'}">${escapeHtml(labelOf(config.statuses, key) || key)}</span>`;
-  }
-
-  // Aviso ao lado da data de retorno (o servidor diz como o retorno está; veja followUpState em server/leads.js).
-  function followUpFlag(state) {
-    if (state === 'overdue') return ' <span class="badge badge-danger">Atrasado</span>';
-    if (state === 'today') return ' <span class="badge badge-pending">Hoje</span>';
-    return '';
-  }
-
-  // Telefone e e-mail viram links (ligar / escrever) na ficha. O telefone só vira link quando parece um
+  // O telefone vira link (ligar) na ficha. Ele só vira link quando parece um
   // número só; textos como "21 99999-1234 / 3333-4444" ficam como texto.
   function phoneHtml(phone) {
     if (!phone) return '—';
@@ -57,17 +37,13 @@ window.Pages = window.Pages || {};
     }
     return escapeHtml(phone);
   }
-  function emailHtml(email) {
-    if (!email) return '—';
-    return `<a href="mailto:${escapeHtml(email)}">${escapeHtml(email)}</a>`;
-  }
-
   function subjectBadges(subjects) {
     return subjects.map((s) => `<span class="badge badge-neutral" style="margin-right:3px;">${escapeHtml(s.name)}</span>`).join('');
   }
 
-  function studentLine(lead) {
-    return [lead.student_name ? `Aluno: ${lead.student_name}` : '', lead.grade_level || ''].filter(Boolean).join(' · ');
+  function reasonBadge(config, key) {
+    const label = labelOf(config.lostReasons, key);
+    return label ? `<span class="badge badge-neutral">${escapeHtml(label)}</span>` : '';
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -85,8 +61,6 @@ window.Pages = window.Pages || {};
       return;
     }
     const selectedIds = new Set((l.subjects || []).map((s) => s.id));
-    // A mesma lista de séries do cadastro de alunos (definida em students.js), quando disponível.
-    const grades = typeof GRADE_LEVEL_SUGGESTIONS !== 'undefined' ? GRADE_LEVEL_SUGGESTIONS : [];
     const options = (list, current, emptyLabel) =>
       (emptyLabel ? `<option value="">${escapeHtml(emptyLabel)}</option>` : '') +
       list.map((o) => `<option value="${escapeHtml(o.key)}"${o.key === current ? ' selected' : ''}>${escapeHtml(o.label)}</option>`).join('');
@@ -102,15 +76,8 @@ window.Pages = window.Pages || {};
         <div class="field-row">
           <div class="field"><label for="ld-phone">Telefone / WhatsApp</label>
             <input type="tel" id="ld-phone" value="${escapeHtml(l.phone || '')}" maxlength="40" autocomplete="off"></div>
-          <div class="field"><label for="ld-email">E-mail</label>
-            <input type="email" id="ld-email" value="${escapeHtml(l.email || '')}" maxlength="120" autocomplete="off"></div>
-        </div>
-        <div class="field-row">
           <div class="field"><label for="ld-student">Nome do aluno</label>
             <input type="text" id="ld-student" value="${escapeHtml(l.student_name || '')}" maxlength="120" autocomplete="off" placeholder="Filho(a) ou quem vai ter aula"></div>
-          <div class="field"><label for="ld-grade">Série do aluno</label>
-            <input type="text" id="ld-grade" value="${escapeHtml(l.grade_level || '')}" list="ld-grade-options" maxlength="40" autocomplete="off" placeholder="Ex.: 6º ano, 2ª série EM">
-            <datalist id="ld-grade-options">${grades.map((g) => `<option value="${escapeHtml(g)}"></option>`).join('')}</datalist></div>
         </div>
         <div class="field"><label>Disciplinas de interesse</label>
           <div class="pill-toggle" id="ld-subjects">
@@ -122,22 +89,16 @@ window.Pages = window.Pages || {};
           </div>
         </div>
         <div class="field-row">
-          <div class="field"><label for="ld-modality">Modalidade de interesse</label>
-            <select id="ld-modality">${options(config.modalities, l.modality, 'Não informado')}</select></div>
           <div class="field"><label for="ld-source">Como conheceu a Olimais</label>
             <select id="ld-source">${options(config.sources, l.source, 'Não informado')}</select></div>
+          <div class="field"><label for="ld-last-contact">Data do último contato</label>
+            <input type="date" id="ld-last-contact" value="${escapeHtml(existing ? (l.last_contact_date || '') : todayInput())}"></div>
         </div>
-        <div class="field-row">
-          <div class="field"><label for="ld-status">Situação</label>
-            <select id="ld-status">${options(config.statuses, l.status || 'novo')}</select></div>
-          <div class="field"><label for="ld-contact-date">Data do primeiro contato</label>
-            <input type="date" id="ld-contact-date" value="${escapeHtml(existing ? (l.contact_date || '') : todayInput())}"></div>
-        </div>
-        <div class="field"><label for="ld-follow-up">Retornar em</label>
-          <input type="date" id="ld-follow-up" value="${escapeHtml(l.follow_up_date || '')}" style="max-width:220px;">
-          <div class="hint">Opcional. O dia em que você quer voltar a falar com essa pessoa; se passar sem você mudar a situação, a lista avisa "Atrasado".</div></div>
+        <div class="field"><label for="ld-reason">Motivo de não fechamento</label>
+          <select id="ld-reason" style="max-width:260px;">${options(config.lostReasons, l.lost_reason, 'Não informado')}</select>
+          <div class="hint">Opcional. Preencha quando a pessoa não fechar. Em “Outros”, explique nas observações.</div></div>
         <div class="field"><label for="ld-notes">Observações</label>
-          <textarea id="ld-notes" rows="5" maxlength="${NOTES_MAX}" placeholder="Ex.: perguntou o valor do pacote de 8 aulas, achou caro por enquanto; pediu para falar de novo em fevereiro…"></textarea>
+          <textarea id="ld-notes" rows="5" maxlength="${NOTES_MAX}" placeholder="Ex.: perguntou o valor do pacote de 8 aulas e achou caro por enquanto; pediu para falar de novo em fevereiro…"></textarea>
         </div>
 
         <div id="ld-error" class="alert alert-danger hidden"></div>
@@ -204,15 +165,11 @@ window.Pages = window.Pages || {};
       const payload = {
         name: $('#ld-name').value.trim(),
         phone: $('#ld-phone').value.trim(),
-        email: $('#ld-email').value.trim(),
         student_name: $('#ld-student').value.trim(),
-        grade_level: $('#ld-grade').value.trim(),
         subject_ids: Array.from(selectedIds),
-        modality: $('#ld-modality').value,
         source: $('#ld-source').value,
-        status: $('#ld-status').value,
-        contact_date: $('#ld-contact-date').value,
-        follow_up_date: $('#ld-follow-up').value,
+        last_contact_date: $('#ld-last-contact').value,
+        lost_reason: $('#ld-reason').value,
         notes: $('#ld-notes').value,
       };
 
@@ -251,9 +208,10 @@ window.Pages = window.Pages || {};
       <div class="card">
         <div class="flex gap-10 wrap lead-filters">
           <input type="text" class="search-input" id="lead-search" placeholder="Buscar nome, telefone, aluno…" autocomplete="off" aria-label="Buscar interessado">
-          <select id="lead-status" aria-label="Filtrar por situação">
-            <option value="">Todas as situações</option>
-            ${config.statuses.map((s) => `<option value="${escapeHtml(s.key)}">${escapeHtml(s.label)}</option>`).join('')}
+          <select id="lead-reason" aria-label="Filtrar por motivo de não fechamento">
+            <option value="">Todos os motivos</option>
+            ${config.lostReasons.map((s) => `<option value="${escapeHtml(s.key)}">${escapeHtml(s.label)}</option>`).join('')}
+            <option value="nenhum">Sem motivo informado</option>
           </select>
           <select id="lead-subject" aria-label="Filtrar por disciplina">
             <option value="">Todas as disciplinas</option>
@@ -265,7 +223,7 @@ window.Pages = window.Pages || {};
     `;
     const wrap = root.querySelector('#lead-list-wrap');
     const searchInput = root.querySelector('#lead-search');
-    const statusSelect = root.querySelector('#lead-status');
+    const reasonSelect = root.querySelector('#lead-reason');
     const subjectSelect = root.querySelector('#lead-subject');
 
     root.querySelector('#add-lead-btn').addEventListener('click', () => {
@@ -276,11 +234,11 @@ window.Pages = window.Pages || {};
     async function loadList() {
       const mine = ++seq;
       const q = searchInput.value.trim();
-      const status = statusSelect.value;
+      const reason = reasonSelect.value;
       const subjectId = subjectSelect.value;
       const params = [];
       if (q) params.push(`search=${encodeURIComponent(q)}`);
-      if (status) params.push(`status=${encodeURIComponent(status)}`);
+      if (reason) params.push(`reason=${encodeURIComponent(reason)}`);
       if (subjectId) params.push(`subjectId=${encodeURIComponent(subjectId)}`);
       let leads;
       try {
@@ -292,7 +250,7 @@ window.Pages = window.Pages || {};
       }
       if (mine !== seq) return;
       if (leads.length === 0) {
-        wrap.innerHTML = (q || status || subjectId)
+        wrap.innerHTML = (q || reason || subjectId)
           ? '<div class="empty-state"><div class="eyebrow">Nenhum interessado</div>Nenhum interessado encontrado para essa busca.</div>'
           : '<div class="empty-state"><div class="eyebrow">Nenhum interessado</div>Cadastre aqui quem entrar em contato mas ainda não agendar aula, e retome a conversa quando quiser.</div>';
         return;
@@ -301,16 +259,15 @@ window.Pages = window.Pages || {};
       wrap.innerHTML = `
         <p class="text-sm muted" style="margin:0 0 8px 0;">${leads.length === 1 ? '1 interessado' : `${leads.length} interessados`}</p>
         <div class="table-wrap"><table class="lead-table">
-          <thead><tr><th>Responsável</th><th>Contato</th><th>Disciplinas</th><th>Situação</th><th>1º contato</th><th>Retorno</th></tr></thead>
+          <thead><tr><th>Responsável</th><th>Telefone</th><th>Disciplinas</th><th>Último contato</th><th>Motivo de não fechamento</th></tr></thead>
           <tbody>
             ${leads.map((l) => `
               <tr class="row-link" data-id="${l.id}">
-                <td><strong>${escapeHtml(l.name)}</strong>${studentLine(l) ? `<div class="lead-cell-sub">${escapeHtml(studentLine(l))}</div>` : ''}</td>
-                <td>${l.phone ? `<div>${escapeHtml(l.phone)}</div>` : ''}${l.email ? `<div class="lead-cell-sub">${escapeHtml(l.email)}</div>` : ''}${!l.phone && !l.email ? dash : ''}</td>
+                <td><strong>${escapeHtml(l.name)}</strong>${l.student_name ? `<div class="lead-cell-sub">${escapeHtml(`Aluno: ${l.student_name}`)}</div>` : ''}</td>
+                <td>${l.phone ? escapeHtml(l.phone) : dash}</td>
                 <td>${subjectBadges(l.subjects) || dash}</td>
-                <td>${statusBadge(config, l.status)}</td>
-                <td>${l.contact_date ? escapeHtml(dayText(l.contact_date)) : dash}</td>
-                <td>${l.follow_up_date ? `${escapeHtml(dayText(l.follow_up_date))}${followUpFlag(l.follow_up_state)}` : dash}</td>
+                <td>${l.last_contact_date ? escapeHtml(dayText(l.last_contact_date)) : dash}</td>
+                <td>${reasonBadge(config, l.lost_reason) || dash}</td>
               </tr>
             `).join('')}
           </tbody>
@@ -326,7 +283,7 @@ window.Pages = window.Pages || {};
       clearTimeout(debounce);
       debounce = setTimeout(loadList, 250);
     });
-    statusSelect.addEventListener('change', loadList);
+    reasonSelect.addEventListener('change', loadList);
     subjectSelect.addEventListener('change', loadList);
     loadList();
   };
@@ -388,21 +345,16 @@ window.Pages = window.Pages || {};
 
     // ----- Contato e interesse -----
     function renderDados() {
-      subtitle.textContent = studentLine(lead) || 'Sem dados do aluno';
+      subtitle.textContent = lead.student_name ? `Aluno: ${lead.student_name}` : 'Sem dados do aluno';
       cardDados.innerHTML = `
         <div class="card-header"><h2>Contato e interesse</h2>
           <button class="btn btn-outline btn-sm" id="edit-lead-btn">Editar</button></div>
         <div class="field-row">
           <div><div class="text-sm muted">Telefone / WhatsApp</div><p class="lead-wrap">${phoneHtml(lead.phone)}</p></div>
-          <div><div class="text-sm muted">E-mail</div><p class="lead-wrap">${emailHtml(lead.email)}</p></div>
-        </div>
-        <div class="field-row">
           <div><div class="text-sm muted">Aluno</div><p class="lead-wrap">${escapeHtml(lead.student_name || '—')}</p></div>
-          <div><div class="text-sm muted">Série</div><p class="lead-wrap">${escapeHtml(lead.grade_level || '—')}</p></div>
         </div>
-        <div><div class="text-sm muted">Disciplinas de interesse</div><p class="lead-wrap">${subjectBadges(lead.subjects) || '—'}</p></div>
         <div class="field-row">
-          <div><div class="text-sm muted">Modalidade de interesse</div><p class="mb-0">${escapeHtml(labelOf(config.modalities, lead.modality) || '—')}</p></div>
+          <div><div class="text-sm muted">Disciplinas de interesse</div><p class="lead-wrap mb-0">${subjectBadges(lead.subjects) || '—'}</p></div>
           <div><div class="text-sm muted">Como conheceu a Olimais</div><p class="mb-0">${escapeHtml(labelOf(config.sources, lead.source) || '—')}</p></div>
         </div>
       `;
@@ -411,41 +363,43 @@ window.Pages = window.Pages || {};
       });
     }
 
-    // ----- Acompanhamento (a situação muda aqui mesmo, sem abrir o formulário) -----
+    // ----- Acompanhamento (o último contato e o motivo mudam aqui mesmo, sem abrir o formulário) -----
     function renderFollow() {
       cardFollow.innerHTML = `
         <div class="card-header"><h2>Acompanhamento</h2></div>
         <div class="field-row">
-          <div><div class="text-sm muted">Situação</div>
-            <p style="margin-bottom:6px;">${statusBadge(config, lead.status)}</p>
-            <select id="ld-quick-status" aria-label="Mudar a situação">
-              ${config.statuses.map((s) => `<option value="${escapeHtml(s.key)}"${s.key === lead.status ? ' selected' : ''}>${escapeHtml(s.label)}</option>`).join('')}
+          <div><div class="text-sm muted">Data do último contato</div>
+            <p style="margin-bottom:6px;">${lead.last_contact_date ? escapeHtml(dayText(lead.last_contact_date)) : '—'}</p>
+            <button type="button" class="btn btn-outline btn-sm" id="ld-contact-today">Registrar contato hoje</button></div>
+          <div><div class="text-sm muted">Motivo de não fechamento</div>
+            <p style="margin-bottom:6px;">${reasonBadge(config, lead.lost_reason) || '—'}</p>
+            <select id="ld-quick-reason" aria-label="Mudar o motivo de não fechamento">
+              <option value="">Não informado</option>
+              ${config.lostReasons.map((s) => `<option value="${escapeHtml(s.key)}"${s.key === lead.lost_reason ? ' selected' : ''}>${escapeHtml(s.label)}</option>`).join('')}
             </select></div>
-          <div><div class="text-sm muted">Retornar em</div>
-            <p class="mb-0">${lead.follow_up_date ? `${escapeHtml(dayText(lead.follow_up_date))}${followUpFlag(lead.follow_up_state)}` : '—'}</p></div>
         </div>
-        <div class="field-row" style="margin-top:14px;">
-          <div><div class="text-sm muted">Primeiro contato</div><p class="mb-0">${lead.contact_date ? escapeHtml(dayText(lead.contact_date)) : '—'}</p></div>
-          <div><div class="text-sm muted">Cadastrado em</div><p class="mb-0">${escapeHtml(formatDate(lead.created_at))}</p></div>
-        </div>
-        <p class="text-sm muted" style="margin:14px 0 0 0;">Última alteração em ${escapeHtml(formatDateTime(lead.updated_at))}.</p>
+        <p class="text-sm muted" style="margin:14px 0 0 0;">Cadastrado em ${escapeHtml(formatDate(lead.created_at))}. Última alteração em ${escapeHtml(formatDateTime(lead.updated_at))}.</p>
       `;
-      const quick = cardFollow.querySelector('#ld-quick-status');
-      quick.addEventListener('change', async () => {
-        const wanted = quick.value;
+      const quick = cardFollow.querySelector('#ld-quick-reason');
+      const today = cardFollow.querySelector('#ld-contact-today');
+      async function patch(fields, okMessage, revert) {
         quick.disabled = true;
+        today.disabled = true;
         try {
-          // Só a situação vai no pedido: o resto do cadastro não é tocado.
-          const saved = await api.put(`/api/leads/${lead.id}`, { status: wanted });
+          // Só o campo mexido vai no pedido: o resto do cadastro não é tocado.
+          const saved = await api.put(`/api/leads/${lead.id}`, fields);
           lead = Object.assign(lead, saved);
           renderFollow();
-          showToast('Situação atualizada.');
+          showToast(okMessage);
         } catch (err) {
           quick.disabled = false;
-          quick.value = lead.status;
+          today.disabled = false;
+          if (revert) revert();
           showToast(err.message, 'error');
         }
-      });
+      }
+      quick.addEventListener('change', () => patch({ lost_reason: quick.value }, 'Motivo atualizado.', () => { quick.value = lead.lost_reason || ''; }));
+      today.addEventListener('click', () => patch({ last_contact_date: todayInput() }, 'Último contato registrado para hoje.'));
     }
 
     // ----- Observações (editadas aqui mesmo, sem abrir o formulário) -----

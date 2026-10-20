@@ -9,27 +9,19 @@
 
 const { db } = require('./db');
 const { httpError } = require('./router');
-const { cleanLine, cleanNotes, cleanSubjectIds, fold, inTransaction, asId, EMAIL_RE } = require('./talents');
+const { cleanLine, cleanNotes, cleanSubjectIds, fold, inTransaction, asId } = require('./talents');
 
-const LIMITS = { name: 120, phone: 40, email: 120, studentName: 120, gradeLevel: 40 };
+const LIMITS = { name: 120, phone: 40, studentName: 120 };
 const MAX_SEARCH = 100;
 
 // ---------- Opções fixas ----------
 // A tela lê estas listas em GET /api/leads/config, e assim os nomes que a pessoa vê ficam num lugar só.
-// "open": a situação ainda é uma oportunidade em andamento (só nelas o retorno pode estar "atrasado").
 
-const STATUSES = [
-  { key: 'novo', label: 'Novo', open: true },
-  { key: 'em_conversa', label: 'Em conversa', open: true },
-  { key: 'retornar', label: 'Retornar depois', open: true },
-  { key: 'virou_aluno', label: 'Virou aluno', open: false },
-  { key: 'sem_interesse', label: 'Sem interesse', open: false },
-];
-
-const MODALITIES = [
-  { key: 'presencial', label: 'Presencial' },
-  { key: 'online', label: 'Online' },
-  { key: 'tanto_faz', label: 'Tanto faz' },
+// Por que o interessado não fechou (opcional; vazio = ainda não informado).
+const LOST_REASONS = [
+  { key: 'valor', label: 'Valor' },
+  { key: 'interno', label: 'Interno da Olimais' },
+  { key: 'outros', label: 'Outros' },
 ];
 
 const SOURCES = [
@@ -43,16 +35,14 @@ const SOURCES = [
 ];
 
 const labelOf = (options) => new Map(options.map((o) => [o.key, o.label]));
-const STATUS_LABEL = labelOf(STATUSES);
-const MODALITY_LABEL = labelOf(MODALITIES);
+const REASON_LABEL = labelOf(LOST_REASONS);
 const SOURCE_LABEL = labelOf(SOURCES);
 
 const MSG = { naoEncontrado: 'Interessado não encontrado' };
 
 function config() {
   return {
-    statuses: STATUSES.map(({ key, label }) => ({ key, label })),
-    modalities: MODALITIES,
+    lostReasons: LOST_REASONS,
     sources: SOURCES,
   };
 }
@@ -110,30 +100,13 @@ function parseInput(body, partial) {
     out.name = name;
   }
   if (want('phone')) out.phone = cleanLine(body.phone, LIMITS.phone, 'O telefone', { number: true });
-  if (want('email')) {
-    const email = cleanLine(body.email, LIMITS.email, 'O e-mail');
-    if (email && !EMAIL_RE.test(email)) throw httpError(400, 'E-mail inválido');
-    out.email = email;
-  }
   if (want('student_name')) out.student_name = cleanLine(body.student_name, LIMITS.studentName, 'O nome do aluno');
-  if (want('grade_level')) out.grade_level = cleanLine(body.grade_level, LIMITS.gradeLevel, 'A série');
-  if (want('modality')) out.modality = cleanChoice(body.modality, MODALITIES, 'Modalidade');
   if (want('source')) out.source = cleanChoice(body.source, SOURCES, 'Origem');
-  if (want('status')) {
-    const raw = body.status;
-    if (!partial && (raw === undefined || raw === null || raw === '')) {
-      out.status = 'novo'; // cadastro novo sem situação: começa como "Novo"
-    } else {
-      const status = cleanChoice(raw, STATUSES, 'Situação');
-      if (!status) throw httpError(400, 'Situação inválida'); // a situação nunca fica em branco
-      out.status = status;
-    }
-  }
-  if (want('contact_date')) {
+  if (want('lost_reason')) out.lost_reason = cleanChoice(body.lost_reason, LOST_REASONS, 'Motivo de não fechamento');
+  if (want('last_contact_date')) {
     // Cadastro novo sem a data: vale hoje. Data apagada de propósito (vazia) fica sem data.
-    out.contact_date = !partial && body.contact_date === undefined ? todayIso() : cleanDate(body.contact_date, 'Data do primeiro contato');
+    out.last_contact_date = !partial && body.last_contact_date === undefined ? todayIso() : cleanDate(body.last_contact_date, 'Data do último contato');
   }
-  if (want('follow_up_date')) out.follow_up_date = cleanDate(body.follow_up_date, 'Data de retorno');
   if (want('notes')) out.notes = cleanNotes(body.notes);
   if (want('subject_ids')) out.subject_ids = cleanSubjectIds(body.subject_ids);
   return out;
@@ -164,32 +137,16 @@ function subjectsByLead() {
   return map;
 }
 
-// Como está o retorno combinado: 'overdue' (a data já passou), 'today', 'upcoming' (ainda vai chegar) ou
-// null (sem data de retorno, ou o caso já está encerrado — "Virou aluno" / "Sem interesse").
-function followUpState(row) {
-  const st = STATUSES.find((s) => s.key === row.status);
-  if (!row.follow_up_date || !st || !st.open) return null;
-  const today = todayIso();
-  if (row.follow_up_date < today) return 'overdue';
-  if (row.follow_up_date === today) return 'today';
-  return 'upcoming';
-}
-
 // full: com observações (ficha); sem: só o necessário para a lista.
 function toJson(row, subjects, full) {
   const out = {
     id: row.id,
     name: row.name,
     phone: row.phone,
-    email: row.email,
     student_name: row.student_name,
-    grade_level: row.grade_level,
-    modality: row.modality,
     source: row.source,
-    status: row.status,
-    contact_date: row.contact_date,
-    follow_up_date: row.follow_up_date,
-    follow_up_state: followUpState(row),
+    last_contact_date: row.last_contact_date,
+    lost_reason: row.lost_reason,
     has_notes: !!row.notes,
     subjects,
     created_at: row.created_at,
@@ -207,10 +164,10 @@ function get(id) {
 const onlyDigits = (s) => String(s === undefined || s === null ? '' : s).replace(/\D/g, '');
 const PHONE_QUERY_RE = /^[\d\s()+.-]+$/;
 
-// Lista, do primeiro contato mais recente para o mais antigo (sem data de contato, no fim). Filtros:
-//   search     nome, contatos, aluno, série, observações, disciplinas, situação, modalidade e origem
+// Lista, do último contato mais recente para o mais antigo (sem data de contato, no fim). Filtros:
+//   search     nome, telefone, aluno, observações, disciplinas, motivo e origem
 //              (sem diferença de acento/maiúscula; um telefone digitado só com números também acha)
-//   status     só aquela situação
+//   reason     só aquele motivo de não fechamento (ou "nenhum": quem ainda não tem motivo)
 //   subjectId  só quem tem aquela disciplina de interesse
 function list(query) {
   const q = query || {};
@@ -223,21 +180,21 @@ function list(query) {
     subjectId = asId(q.subjectId);
     if (subjectId === null) throw httpError(400, 'Disciplina inválida');
   }
-  let status = null;
-  if (q.status !== undefined && q.status !== '') {
-    if (typeof q.status !== 'string' || !STATUS_LABEL.has(q.status)) throw httpError(400, 'Situação inválida');
-    status = q.status;
+  let reason = null;
+  if (q.reason !== undefined && q.reason !== '') {
+    if (typeof q.reason !== 'string' || (q.reason !== 'nenhum' && !REASON_LABEL.has(q.reason))) throw httpError(400, 'Motivo inválido');
+    reason = q.reason;
   }
   const bySubject = subjectsByLead();
-  let rows = db.prepare('SELECT * FROM leads ORDER BY (contact_date IS NULL), contact_date DESC, id DESC').all();
-  if (status !== null) rows = rows.filter((r) => r.status === status);
+  let rows = db.prepare('SELECT * FROM leads ORDER BY (last_contact_date IS NULL), last_contact_date DESC, id DESC').all();
+  if (reason !== null) rows = rows.filter((r) => (reason === 'nenhum' ? !r.lost_reason : r.lost_reason === reason));
   if (subjectId !== null) rows = rows.filter((r) => (bySubject.get(r.id) || []).some((s) => s.id === subjectId));
   if (search) {
     rows = rows.filter((r) => {
       const hay = fold([
-        r.name, r.email, r.phone, r.student_name, r.grade_level, r.notes,
+        r.name, r.phone, r.student_name, r.notes,
         (bySubject.get(r.id) || []).map((s) => s.name).join(' '),
-        STATUS_LABEL.get(r.status), MODALITY_LABEL.get(r.modality), SOURCE_LABEL.get(r.source),
+        REASON_LABEL.get(r.lost_reason), SOURCE_LABEL.get(r.source),
       ].join(' \n '));
       return hay.includes(search) || (phoneSearch && onlyDigits(r.phone).includes(searchDigits));
     });
@@ -257,9 +214,9 @@ function create(body) {
   const v = parseInput(body, false);
   const id = inTransaction(() => {
     const info = db.prepare(`
-      INSERT INTO leads (name, phone, email, student_name, grade_level, modality, source, status, contact_date, follow_up_date, notes)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(v.name, v.phone, v.email, v.student_name, v.grade_level, v.modality, v.source, v.status, v.contact_date, v.follow_up_date, v.notes);
+      INSERT INTO leads (name, phone, student_name, source, last_contact_date, lost_reason, notes)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(v.name, v.phone, v.student_name, v.source, v.last_contact_date, v.lost_reason, v.notes);
     const newId = Number(info.lastInsertRowid);
     setSubjects(newId, v.subject_ids);
     return newId;
@@ -267,7 +224,7 @@ function create(body) {
   return get(id);
 }
 
-const COLUMNS = ['name', 'phone', 'email', 'student_name', 'grade_level', 'modality', 'source', 'status', 'contact_date', 'follow_up_date', 'notes'];
+const COLUMNS = ['name', 'phone', 'student_name', 'source', 'last_contact_date', 'lost_reason', 'notes'];
 
 function update(id, body) {
   if (!db.prepare('SELECT 1 FROM leads WHERE id = ?').get(id)) throw httpError(404, MSG.naoEncontrado);
@@ -289,4 +246,4 @@ function remove(id) {
   if (!info.changes) throw httpError(404, MSG.naoEncontrado);
 }
 
-module.exports = { config, list, get, create, update, remove, asId, STATUSES };
+module.exports = { config, list, get, create, update, remove, asId, LOST_REASONS };
