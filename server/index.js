@@ -48,6 +48,7 @@ require('./routes/materials').register(router);
 require('./routes/manual').register(router);
 require('./routes/talents').register(router);
 require('./routes/leads').register(router);
+require('./routes/whatsapp').register(router);
 
 // Materiais de aula: prepara a pasta no volume, limpa envios que ficaram pela metade e
 // arquivos sem registro no banco.
@@ -78,6 +79,10 @@ svc.runPeriodicChecks(db);
 setInterval(() => {
   try { svc.runPeriodicChecks(db); } catch (e) { console.error('[cron] erro ao gerar faturas/mensalidades:', e); }
 }, 15 * 60 * 1000);
+
+// Confirmação de aulas pelo WhatsApp: relógio interno (aviso 24h antes, confirmação automática 5h antes).
+// Só faz alguma coisa depois que a administração liga a integração na página "WhatsApp".
+require('./whatsapp/scheduler').start();
 
 server.listen(PORT, () => {
   console.log(`Olimais rodando em http://localhost:${PORT}`);

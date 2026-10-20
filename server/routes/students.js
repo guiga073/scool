@@ -29,6 +29,16 @@ function cleanGradeLevel(value) {
   return text;
 }
 
+// Quem recebe o aviso de confirmação das aulas pelo WhatsApp: o responsável (padrão) ou, em casos
+// específicos, o próprio aluno (aí o aviso vai para o telefone do aluno).
+const CONFIRMERS = ['responsavel', 'aluno'];
+
+function cleanConfirmer(value, fallback) {
+  if (value === undefined || value === null || value === '') return fallback;
+  if (!CONFIRMERS.includes(value)) throw httpError(400, 'Valor inválido em "Quem confirma as aulas"');
+  return value;
+}
+
 // Garante que o e-mail de acesso não colida com um admin, um professor, ou outro aluno.
 function assertLoginEmailAvailable(email, excludeStudentId) {
   const conflict = svc.findLoginEmailConflict(db, email, excludeStudentId ? { type: 'student', id: excludeStudentId } : null);
@@ -55,17 +65,18 @@ function register(router) {
     const b = req.body;
     if (!b.name || !b.name.trim()) throw httpError(400, 'Nome do aluno é obrigatório');
     const gradeLevel = cleanGradeLevel(b.grade_level);
+    const confirmer = cleanConfirmer(b.confirmer, 'responsavel');
     const loginEmail = b.login_email ? String(b.login_email).trim().toLowerCase() : null;
     assertLoginEmailAvailable(loginEmail, null);
     if (loginEmail && !b.login_password) throw httpError(400, 'Defina uma senha de acesso para o aluno');
 
     const info = db.prepare(`
-      INSERT INTO students (name, address, guardian_name, guardian_phone, phone, email, monthly_payment, login_email, password_hash, grade_level)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO students (name, address, guardian_name, guardian_phone, phone, email, monthly_payment, login_email, password_hash, grade_level, confirmer)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       b.name.trim(), b.address || null, b.guardian_name || null, b.guardian_phone || null,
       b.phone || null, b.email || null, b.monthly_payment ? 1 : 0,
-      loginEmail, b.login_password ? hashPassword(b.login_password) : null, gradeLevel
+      loginEmail, b.login_password ? hashPassword(b.login_password) : null, gradeLevel, confirmer
     );
     const row = db.prepare('SELECT * FROM students WHERE id = ?').get(info.lastInsertRowid);
     sendJson(res, 201, studentToJson(row));
@@ -100,6 +111,8 @@ function register(router) {
     // Se o pedido nem menciona a série (ex.: uma tela aberta antes desta atualização), ela fica como está:
     // só some se for enviada vazia de propósito.
     const gradeLevel = Object.prototype.hasOwnProperty.call(b, 'grade_level') ? cleanGradeLevel(b.grade_level) : existing.grade_level;
+    // Idem para "quem confirma as aulas": se o pedido não menciona, fica como está.
+    const confirmer = cleanConfirmer(b.confirmer, existing.confirmer || 'responsavel');
 
     const loginEmail = b.login_email ? String(b.login_email).trim().toLowerCase() : null;
     assertLoginEmailAvailable(loginEmail, existing.id);
@@ -114,12 +127,12 @@ function register(router) {
 
     db.prepare(`
       UPDATE students SET name=?, address=?, guardian_name=?, guardian_phone=?, phone=?, email=?, monthly_payment=?,
-        login_email=?, password_hash=?, grade_level=?
+        login_email=?, password_hash=?, grade_level=?, confirmer=?
       WHERE id=?
     `).run(
       b.name.trim(), b.address || null, b.guardian_name || null, b.guardian_phone || null,
       b.phone || null, b.email || null, b.monthly_payment ? 1 : 0,
-      loginEmail, passwordHash, gradeLevel,
+      loginEmail, passwordHash, gradeLevel, confirmer,
       req.params.id
     );
     const row = db.prepare('SELECT * FROM students WHERE id = ?').get(req.params.id);

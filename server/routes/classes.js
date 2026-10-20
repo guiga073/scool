@@ -5,9 +5,13 @@ const { sendJson, httpError } = require('../router');
 const { requireAuth } = require('./auth');
 const svc = require('../services');
 const { normalizeMeetingLink } = require('../links');
+const conf = require('../confirmation');
+const wa = require('../whatsapp/config');
+const waService = require('../whatsapp/service');
 
 const CLASS_SELECT = `
   SELECT classes.*, students.name AS student_name, students.address AS student_address,
+         students.guardian_name, students.guardian_phone, students.phone AS student_phone, students.confirmer,
          teachers.name AS teacher_name, subjects.name AS subject_name
   FROM classes
   JOIN students ON students.id = classes.student_id
@@ -41,9 +45,15 @@ function register(router) {
   // Lista/busca de aulas — usada tanto pela agenda/calendário quanto pela busca
   router.get('/api/classes', async (req, res) => {
     requireAuth(req);
-    const { start, end, studentId, teacherId, search, status } = req.query;
+    const { start, end, studentId, teacherId, search, status, confirmation } = req.query;
     let sql = CLASS_SELECT + " WHERE classes.status = ?";
     const params = [status || 'scheduled'];
+    // Filtro opcional pela confirmação da aula (pendente / confirmada / pedido_cancelamento).
+    if (confirmation !== undefined && confirmation !== '') {
+      if (!conf.isValidStatus(confirmation)) throw httpError(400, 'Status de confirmação inválido');
+      sql += ' AND classes.confirmation_status = ?';
+      params.push(confirmation);
+    }
     if (start) { sql += ' AND classes.start_time >= ?'; params.push(start); }
     if (end) { sql += ' AND classes.start_time <= ?'; params.push(end); }
     if (studentId) { sql += ' AND classes.student_id = ?'; params.push(studentId); }
@@ -156,8 +166,45 @@ function register(router) {
     svc.syncInvoiceForDate(db, existing.teacher_id, new Date(existing.start_time.replace(' ', 'T')));
     svc.syncInvoiceForDate(db, b.teacher_id, new Date(b.start_time.replace(' ', 'T')));
 
+    // Mudou o horário (ou o aluno)? O aviso de confirmação antigo não vale mais: a aula volta a "pendente" e um
+    // novo aviso sai 24h antes do novo horário. Mudar só professor, valor ou link não mexe na confirmação.
+    if (String(b.start_time) !== String(existing.start_time) || Number(b.student_id) !== Number(existing.student_id)) {
+      conf.resetConfirmation(db, req.params.id);
+    }
+
     const row = db.prepare(CLASS_SELECT + ' WHERE classes.id = ?').get(req.params.id);
     sendJson(res, 200, { class: classToJson(row), conflicts });
+  });
+
+  // Confirmação da aula (Pendente confirmação / Aula confirmada / Pedido de cancelamento), editada pela
+  // administração a qualquer momento — por exemplo depois de resolver o assunto por telefone com o responsável.
+  // Não mexe no status da aula: um "pedido de cancelamento" continua contando nas estatísticas.
+  router.put('/api/classes/:id/confirmation', async (req, res) => {
+    requireAuth(req);
+    const existing = db.prepare('SELECT * FROM classes WHERE id = ?').get(req.params.id);
+    if (!existing) throw httpError(404, 'Aula não encontrada');
+    if (existing.status === 'cancelled') throw httpError(400, 'Esta aula foi cancelada: não há mais o que confirmar.');
+    const status = req.body && req.body.status;
+    if (!conf.isValidStatus(status)) throw httpError(400, 'Status de confirmação inválido');
+    if (status !== existing.confirmation_status) conf.setStatus(db, existing.id, status, 'admin');
+    const row = db.prepare(CLASS_SELECT + ' WHERE classes.id = ?').get(req.params.id);
+    sendJson(res, 200, { class: classToJson(row) });
+  });
+
+  // Envia (ou reenvia) agora o aviso de confirmação pelo WhatsApp, fora do horário automático.
+  router.post('/api/classes/:id/send-confirmation', async (req, res) => {
+    requireAuth(req);
+    const existing = db.prepare('SELECT * FROM classes WHERE id = ?').get(req.params.id);
+    if (!existing) throw httpError(404, 'Aula não encontrada');
+    if (existing.status === 'cancelled') throw httpError(400, 'Esta aula foi cancelada.');
+    if (!wa.credentialsReady()) throw httpError(400, 'O WhatsApp ainda não está configurado. Veja a página WhatsApp.');
+    if (existing.confirmation_status !== 'pendente') throw httpError(400, 'Só dá para enviar o aviso de uma aula em "Pendente confirmação". Mude o status primeiro.');
+    if (conf.parseLocal(existing.start_time) <= new Date()) throw httpError(400, 'Esta aula já começou.');
+    conf.resetSend(db, existing.id);
+    const result = await waService.sendConfirmation(existing.id);
+    if (!result.ok) throw httpError(502, result.error || 'Não foi possível enviar o aviso.');
+    const row = db.prepare(CLASS_SELECT + ' WHERE classes.id = ?').get(req.params.id);
+    sendJson(res, 200, { class: classToJson(row) });
   });
 
   // Cancelar aula: some de todos os lugares do sistema (calendários, pagamentos, cálculos),
@@ -172,4 +219,4 @@ function register(router) {
   });
 }
 
-module.exports = { register };
+module.exports = { register, CLASS_SELECT, classToJson };

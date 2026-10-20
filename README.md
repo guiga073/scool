@@ -4,7 +4,7 @@ Sistema interno de gestão para o seu reforço escolar: cadastro de alunos e pro
 um controle de interessados (os pais que pediram informações e ainda não agendaram aula),
 um banco de talentos com os potenciais professores que você quer guardar para o futuro,
 agendamento de aulas com calendário, materiais de aula compartilhados entre professores
-e alunos, e controle de pagamentos (a receber dos alunos e a pagar aos professores,
+e alunos, confirmação das aulas pelo WhatsApp Business, e controle de pagamentos (a receber dos alunos e a pagar aos professores,
 quinzenalmente).
 
 Este documento explica como testar o sistema no seu computador e, principalmente,
@@ -875,7 +875,65 @@ aluno) de gente que ainda não é sua cliente. Boas práticas simples:
 
 ---
 
-## 9. Solução de problemas
+## 9. Confirmação das aulas pelo WhatsApp — como funciona e cuidados
+
+> O passo a passo para ligar a integração com a Meta (conta, número, modelos, token, webhook) está
+> no arquivo **GUIA-WHATSAPP.md**. Aqui está o que o sistema faz depois de ligado.
+
+### Status de confirmação (todas as aulas)
+Toda aula tem, além de "agendada/cancelada", um **status de confirmação**:
+**Pendente confirmação** (padrão de toda aula nova), **Aula confirmada** e **Pedido de cancelamento**.
+- "Pedido de cancelamento" **não tira a aula das estatísticas, das contas a receber nem do pagamento
+  do professor**. A aula só some se a administração a excluir ("Cancelar aula").
+- A administração pode trocar o status a qualquer momento, na janela da aula (seção "Confirmação da aula").
+- Mudar o **horário** ou o **aluno** de uma aula volta o status para "pendente" e descarta o aviso antigo.
+- Professores e alunos **não veem** o status nem nada sobre a confirmação.
+- Pedidos de cancelamento aparecem em **vermelho** no calendário e num cartão no **Painel**.
+
+### O que acontece sozinho (com a integração ligada)
+1. **24h antes** da aula, o sistema manda o modelo de mensagem com os botões **Sim / Não** para o
+   responsável (ou para o próprio aluno, se o cadastro dele tiver "Quem confirma = o próprio aluno").
+   Aulas criadas com menos de 24h de antecedência recebem o aviso assim que o sistema perceber
+   (até 1 minuto), desde que faltem mais de 5h.
+2. **Sim** → status "Aula confirmada" (origem: WhatsApp).
+3. **Não** → status "Pedido de cancelamento", marcação vermelha, cartão no Painel e **mensagem
+   automática para o WhatsApp da Olimais** (número de alertas, configurado na página WhatsApp).
+4. **Sem resposta**: 5h antes da aula, a aula que recebeu o aviso é **confirmada automaticamente**.
+   Aula cujo aviso não foi entregue (erro) **não** é confirmada sozinha — fica pendente e aparece
+   para você resolver.
+5. O responsável recebe uma resposta automática curta ("aula confirmada" / "recebemos o seu pedido").
+   Dá para desligar na página WhatsApp.
+
+### Onde fica tudo
+Menu **WhatsApp** (só administração): situação da conexão, testar conexão, ligar/desligar, número de
+alertas, nomes dos modelos, mensagens de teste, textos dos modelos para copiar e o **histórico** das
+mensagens (enviadas, entregues, lidas, falhas e respostas recebidas; guardado por 90 dias).
+A integração **vem desligada** — nada é enviado até você ligar.
+
+### Variáveis da Railway (nunca no chat, nunca no GitHub)
+`WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_APP_SECRET`, `WHATSAPP_VERIFY_TOKEN` e,
+opcional, `WHATSAPP_WABA_ID` (mostra a situação dos modelos). Detalhes no GUIA-WHATSAPP.md.
+
+### Decisões que tomei por você
+- O texto da mensagem é o que você enviou (3 variáveis: aluno, data, horário). Disciplina e professor
+  não estão nele; dá para acrescentar (basta criar um novo modelo na Meta com mais variáveis).
+- Respostas **digitadas** só valem se forem exatamente "sim"/"não" (ou pedidos claros como "preciso
+  remarcar") e se houver **uma** aula esperando aquele telefone; senão, ficam só no histórico.
+- Mensagens livres escritas para o número da API **não** aparecem no WhatsApp comum: só no histórico
+  do portal. Use um número só para a API (não o do aplicativo).
+- Falhas temporárias são tentadas de novo (até 5 vezes, a cada 10 minutos).
+
+### Cuidados (LGPD e custos)
+- Só envie para quem já é cliente e aceitou ser contatado; o telefone cadastrado é usado só para isso.
+- A Meta cobra por mensagem (modelos "utilitários"); confira a tabela de preços atual dela.
+- O histórico (`wa_messages`) entra no "Baixar backup dos dados".
+
+### Problemas comuns
+Veja a seção de problemas do GUIA-WHATSAPP.md.
+
+---
+
+## 10. Solução de problemas
 
 - **"Cannot find module 'node:sqlite'" ou erro parecido ao iniciar** — a versão do
   Node em uso é anterior à 22.5. Confira em Settings do serviço (Railway/Render) se dá
@@ -916,7 +974,7 @@ aluno) de gente que ainda não é sua cliente. Boas práticas simples:
 
 ---
 
-## 10. Estrutura do projeto
+## 11. Estrutura do projeto
 
 ```
 server/           todo o backend (servidor, banco de dados, regras de negócio, rotas)
@@ -930,10 +988,13 @@ server/           todo o backend (servidor, banco de dados, regras de negócio, 
   router.js          roteador HTTP simples (sem framework)
   routes/            um arquivo por área (alunos, professores, agendamento, pagamentos,
                      materiais — este com todas as regras de quem pode ver/enviar/apagar —,
-                     talentos e interessados — só administração — e manual, que entrega o
+                     talentos e interessados — só administração —, whatsapp (webhook + painel) e manual, que entrega o
                      PDF do manual só para alunos logados)
   assets/            arquivos entregues só depois do login (hoje: manual-aluno.pdf;
                      não confundir com public/assets/, que é pública)
+  confirmation.js    status de confirmação das aulas (pendente/confirmada/pedido de cancelamento)
+  whatsapp/          integração com o WhatsApp Business (API da Meta): config, telefones, modelos de
+                     mensagem, cliente HTTP, regras de envio/resposta, webhook e relógio automático
   index.js           ponto de entrada — inicia o servidor
 public/            todo o frontend (HTML/CSS/JS puro, sem build)
   index.html         estrutura principal do site (depois do login, para a secretaria)

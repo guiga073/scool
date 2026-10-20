@@ -37,6 +37,7 @@ async function router() {
     else if (page === 'financeiro') await Pages.finance(root);
     else if (page === 'agendamento') await Pages.scheduling(root);
     else if (page === 'pagamentos') await Pages.payments(root);
+    else if (page === 'whatsapp') await Pages.whatsapp(root);
     else root.innerHTML = '<div class="empty-state"><div class="eyebrow">404</div>Página não encontrada.</div>';
   } catch (err) {
     if (err.status === 401) { window.location.href = '/login.html'; return; }

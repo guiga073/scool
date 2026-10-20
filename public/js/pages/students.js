@@ -57,6 +57,14 @@ function studentFormModal(existing, onSaved) {
           <input type="tel" id="sf-guardian-phone" value="${escapeHtml(s.guardian_phone || '')}"></div>
       </div>
       <div class="field">
+        <label for="sf-confirmer">Quem confirma as aulas pelo WhatsApp</label>
+        <select id="sf-confirmer">
+          <option value="responsavel" ${s.confirmer !== 'aluno' ? 'selected' : ''}>O responsável (padrão)</option>
+          <option value="aluno" ${s.confirmer === 'aluno' ? 'selected' : ''}>O próprio aluno (caso específico)</option>
+        </select>
+        <div class="hint">24h antes de cada aula, o sistema manda um pedido de confirmação (Sim/Não) por WhatsApp. Por padrão ele vai para o <strong>telefone do responsável</strong>; escolha “O próprio aluno” só em casos específicos — aí vai para o <strong>telefone do aluno</strong>. Use o número completo, com DDD (ex.: (21) 99999-1234).</div>
+      </div>
+      <div class="field">
         <div class="checkbox-row">
           <input type="checkbox" id="sf-monthly" ${s.monthly_payment ? 'checked' : ''}>
           <label for="sf-monthly">Pagamento mensal (em vez de pagar por aula)</label>
@@ -97,6 +105,7 @@ function studentFormModal(existing, onSaved) {
       address: backdrop.querySelector('#sf-address').value.trim(),
       guardian_name: backdrop.querySelector('#sf-guardian').value.trim(),
       guardian_phone: backdrop.querySelector('#sf-guardian-phone').value.trim(),
+      confirmer: backdrop.querySelector('#sf-confirmer').value,
       monthly_payment: monthlyCheckbox.checked,
       login_email: backdrop.querySelector('#sf-login-email').value.trim(),
       login_password: backdrop.querySelector('#sf-login-password').value,
@@ -255,6 +264,7 @@ Pages.studentDetail = async function (root, id) {
           <div><div class="text-sm muted">Responsável</div><p>${escapeHtml(student.guardian_name || '—')}</p></div>
           <div><div class="text-sm muted">Telefone do responsável</div><p>${escapeHtml(student.guardian_phone || '—')}</p></div>
         </div>
+        <div><div class="text-sm muted">Quem confirma as aulas pelo WhatsApp</div><p>${student.confirmer === 'aluno' ? 'O próprio aluno (aviso vai para o telefone do aluno)' : 'O responsável (aviso vai para o telefone do responsável)'}</p></div>
         <div><div class="text-sm muted">Acesso ao sistema</div><p>${student.has_login ? `<span class="badge badge-confirmed">Login ativo</span> ${escapeHtml(student.login_email)}` : '<span class="badge badge-neutral">Sem acesso configurado</span>'}</p></div>
       </div>
     `;

@@ -6,6 +6,7 @@ const { db } = require('../db');
 const { sendJson, httpError } = require('../router');
 const { requireTeacherAuth } = require('./auth');
 const svc = require('../services');
+const { stripForPortal } = require('../confirmation');
 
 function getTeacherSubjects(teacherId) {
   return db.prepare(`
@@ -52,7 +53,8 @@ function register(router) {
     if (end) { sql += ' AND classes.start_time <= ?'; params.push(end); }
     sql += ' ORDER BY classes.start_time';
     const rows = db.prepare(sql).all(...params);
-    sendJson(res, 200, rows);
+    // A confirmação da aula (WhatsApp) é só da administração: não vai para a tela do professor.
+    sendJson(res, 200, rows.map(stripForPortal));
   });
 
   router.get('/api/teacher-portal/earnings', async (req, res) => {

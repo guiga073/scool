@@ -767,3 +767,37 @@ table.avail-grid td.avail-on:hover { background: var(--primary-soft); }
 @media (min-width: 700px) {
   .talent-avail table.avail-grid { width: auto; }
 }
+
+/* ---------- Confirmação das aulas pelo WhatsApp ---------- */
+
+/* Pedido de cancelamento: marcação vermelha na aula (calendário, listas, painel). */
+.time-slot-list .slot.cancel-req { border-left: 3px solid var(--danger); background: var(--danger-tint); }
+.month-cell .chip.cancel-req { background: var(--danger); color: #fff; font-weight: 600; }
+.slot-confirm { margin-top: 4px; }
+.confirm-error { color: var(--danger); font-weight: 500; overflow-wrap: anywhere; }
+/* Bloco "Confirmação da aula" no detalhe da aula. */
+.confirm-box { border: 1px solid var(--border); border-radius: var(--radius-m); background: var(--surface-sunken); padding: 12px 14px; margin: 14px 0; }
+.confirm-box.is-alert { border-color: #E3BAB2; background: var(--danger-tint); }
+.confirm-box select { margin: 0; }
+/* Cartão de alerta no Painel (pedidos de cancelamento). */
+.card.card-alert { border: 1px solid #E3BAB2; }
+.card.card-alert .card-header h2 { color: var(--danger); }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* Página WhatsApp */
+.wa-checks { list-style: none; margin: 0 0 16px; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.wa-check { display: flex; gap: 10px; align-items: flex-start; overflow-wrap: anywhere; }
+.wa-check code, .wa-details code, .wa-tpl-status code { font-size: 12px; background: var(--surface-sunken); border-radius: 4px; padding: 1px 5px; }
+.wa-mark { flex: 0 0 22px; height: 22px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; }
+.wa-check.ok .wa-mark { background: var(--confirmed-tint); color: var(--confirmed); }
+.wa-check.bad .wa-mark { background: var(--danger-tint); color: var(--danger); }
+.wa-check.opt .wa-mark { background: var(--surface-sunken); color: var(--ink-faint); }
+.wa-details { border-top: 1px solid var(--border); padding: 10px 0; }
+.wa-details summary { cursor: pointer; font-weight: 600; font-size: 14px; }
+.wa-details textarea { width: 100%; font-size: 13px; background: var(--surface-sunken); margin-bottom: 8px; }
+.wa-tpl-status { margin: 8px 0 0; padding-left: 18px; }
+.wa-log td { vertical-align: top; }
+.wa-log .wa-detail { min-width: 220px; overflow-wrap: anywhere; font-size: 13px; color: var(--ink-soft); }
+@media (max-width: 700px) {
+  .wa-log td:nth-child(-n+5) { white-space: nowrap; }
+}

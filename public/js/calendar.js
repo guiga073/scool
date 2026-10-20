@@ -50,6 +50,28 @@ const CalendarMath = {
   addYears(date, n) { return new Date(date.getFullYear() + n, date.getMonth(), date.getDate()); },
 };
 
+// ---- Confirmação da aula (WhatsApp) ----
+// Só a administração recebe estes campos (o servidor os tira das telas de professor e aluno), então nas
+// telas deles nada disso aparece. "Pedido de cancelamento" é marcado em vermelho para a administração
+// resolver; a aula continua valendo nas contas até ela ser excluída.
+function isCancelRequest(c) { return !!c && c.confirmation_status === 'pedido_cancelamento'; }
+
+function confirmationBadge(c) {
+  if (!c || !c.confirmation_status) return '';
+  if (c.confirmation_status === 'pedido_cancelamento') return '<span class="badge badge-danger">Pedido de cancelamento</span>';
+  if (c.confirmation_status === 'confirmada') return '<span class="badge badge-confirmed">Aula confirmada</span>';
+  // "Pendente" só interessa para aula que ainda vai acontecer (as antigas ficam pendentes por padrão).
+  const d = parseDbDate(c.start_time);
+  if (d && d.getTime() > Date.now()) return '<span class="badge badge-pending">Pendente confirmação</span>';
+  return '';
+}
+
+// Linha com a etiqueta de confirmação, para dentro do texto da aula nas listas ('' para quem não tem o campo).
+function slotConfirmHtml(c) {
+  const badge = confirmationBadge(c);
+  return badge ? `<div class="slot-confirm">${badge}</div>` : '';
+}
+
 const Calendar = {
   // container: elemento DOM. options: { view, refDate, onNavigate(view, refDate), onSelectClass(cls), onCreateAt(date) }
   renderToolbar(container, state, onChange) {
@@ -120,7 +142,7 @@ const Calendar = {
         const shown = dayClasses.slice(0, 3);
         const aulas = total === 1 ? 'aula' : 'aulas';
         cell.innerHTML = `<span class="day-num">${day.getDate()}</span>` +
-          shown.map(c => `<span class="chip">${formatTime(c.start_time)} ${escapeHtml(CalendarMath.firstName(c.student_name))}</span>`).join('') +
+          shown.map(c => `<span class="chip${isCancelRequest(c) ? ' cancel-req' : ''}"${isCancelRequest(c) ? ' title="Pedido de cancelamento"' : ''}>${formatTime(c.start_time)} ${escapeHtml(CalendarMath.firstName(c.student_name))}</span>`).join('') +
           (total > 3 ? `<span class="more">+${total - 3} mais</span>` : '') +
           // Contador do dia: nas telas estreitas (celular) os "chips" acima ficam escondidos, então é ele que
           // mostra, em TODO dia com aula, quantas aulas existem. No computador fica escondido (ver o CSS).
@@ -156,10 +178,10 @@ const Calendar = {
         } else {
           dayClasses.forEach(c => {
             const slot = document.createElement('div');
-            slot.className = 'slot';
+            slot.className = 'slot' + (isCancelRequest(c) ? ' cancel-req' : '');
             slot.innerHTML = `<span class="time">${formatTime(c.start_time)}–${formatTime(c.end_time)}</span>
               <span class="grow">${escapeHtml(c.student_name)} · ${escapeHtml(c.subject_name)} <span class="muted">com ${escapeHtml(c.teacher_name)}</span>
-              ${c.modality === 'presencial' ? `<br><span class="text-sm muted">📍 ${c.student_address ? escapeHtml(c.student_address) : 'endereço não cadastrado'}</span>` : ''}</span>
+              ${c.modality === 'presencial' ? `<br><span class="text-sm muted">📍 ${c.student_address ? escapeHtml(c.student_address) : 'endereço não cadastrado'}</span>` : ''}${slotConfirmHtml(c)}</span>
               <span class="badge badge-neutral">${c.modality === 'online' ? 'Online' : 'Presencial'}</span>`;
             slot.addEventListener('click', () => onSelectClass(c));
             list.appendChild(slot);
@@ -201,9 +223,9 @@ const Calendar = {
       <div class="modal-header"><h3>${WEEKDAY_NAMES[day.getDay()]}, ${day.getDate()} de ${MONTH_NAMES[day.getMonth()]}</h3>
         <button class="modal-close" id="dl-close">&times;</button></div>
       <div class="time-slot-list">
-        ${list.map(c => `<div class="slot" data-id="${c.id}">
+        ${list.map(c => `<div class="slot${isCancelRequest(c) ? ' cancel-req' : ''}" data-id="${c.id}">
             <span class="time">${formatTime(c.start_time)}–${formatTime(c.end_time)}</span>
-            <span class="grow">${escapeHtml(c.student_name)} · ${escapeHtml(c.subject_name)} <span class="muted">com ${escapeHtml(c.teacher_name)}</span></span>
+            <span class="grow">${escapeHtml(c.student_name)} · ${escapeHtml(c.subject_name)} <span class="muted">com ${escapeHtml(c.teacher_name)}</span>${slotConfirmHtml(c)}</span>
           </div>`).join('')}
       </div>
       ${onCreateAt ? `<div class="form-actions"><button class="btn btn-accent" id="dl-add">+ Agendar aula neste dia</button></div>` : ''}

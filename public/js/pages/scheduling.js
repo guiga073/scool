@@ -315,6 +315,57 @@ async function openClassFormModal(options, onSaved) {
   });
 }
 
+// Link "abrir conversa" do WhatsApp para um telefone digitado do jeito brasileiro (com ou sem DDI).
+function whatsappLink(rawPhone) {
+  let digits = String(rawPhone || '').replace(/\D/g, '').replace(/^0+/, '');
+  if (digits.length === 10 || digits.length === 11) digits = '55' + digits;
+  return digits.length >= 10 ? `https://wa.me/${digits}` : '';
+}
+
+// Bloco "Confirmação da aula" do detalhe da aula (só a administração recebe estes campos).
+function confirmationSectionHtml(cls) {
+  if (!cls.confirmation_status) return '';
+  const future = parseDbDate(cls.start_time).getTime() > Date.now();
+  const when = cls.confirmation_updated_at ? formatDateTime(cls.confirmation_updated_at) : '';
+  const lines = [];
+  if (cls.confirmation_source === 'whatsapp') lines.push(`Respondido pelo WhatsApp em ${when}.`);
+  else if (cls.confirmation_source === 'automatico') lines.push(`Confirmada automaticamente em ${when} (sem resposta até 5h antes da aula).`);
+  else if (cls.confirmation_source === 'admin') lines.push(`Definido pela administração em ${when}.`);
+  if (cls.confirm_error) lines.push(`<span class="confirm-error">⚠️ ${escapeHtml(cls.confirm_error)}</span>`);
+  else if (cls.confirm_wamid) lines.push(`Aviso enviado pelo WhatsApp em ${formatDateTime(cls.confirm_sent_at)}.`);
+  else if (cls.confirmation_status === 'pendente' && future) lines.push('O aviso é enviado automaticamente pelo WhatsApp 24h antes da aula (com a integração ligada).');
+
+  const toStudent = cls.confirmer === 'aluno';
+  const rawPhone = toStudent ? cls.student_phone : cls.guardian_phone;
+  const contactName = toStudent ? cls.student_name : cls.guardian_name;
+  const link = whatsappLink(rawPhone);
+  const contact = `<div class="text-sm" style="margin-top:8px;">Quem confirma: <strong>${toStudent ? 'o próprio aluno' : 'o responsável'}</strong>` +
+    `${contactName ? ' · ' + escapeHtml(contactName) : ''}` +
+    `${rawPhone ? ' · ' + escapeHtml(rawPhone) : ' · <span class="confirm-error">sem telefone cadastrado</span>'}` +
+    `${link ? ` · <a href="${escapeHtml(link)}" target="_blank" rel="noopener noreferrer">Abrir no WhatsApp</a>` : ''}</div>`;
+  const canSend = cls.confirmation_status === 'pendente' && future;
+
+  return `
+    <div class="confirm-box${isCancelRequest(cls) ? ' is-alert' : ''}" id="cd-confirm-box">
+      <div class="flex-between"><strong>Confirmação da aula</strong>${confirmationBadge(cls)}</div>
+      <div class="field" style="margin:10px 0 6px;">
+        <select id="cd-confirm-status" aria-label="Status da confirmação da aula">
+          ${CONFIRMATION_OPTIONS.map(o => `<option value="${o.key}" ${cls.confirmation_status === o.key ? 'selected' : ''}>${o.label}</option>`).join('')}
+        </select>
+      </div>
+      ${lines.length ? `<p class="text-sm muted" style="margin:0;">${lines.join('<br>')}</p>` : ''}
+      ${isCancelRequest(cls) ? '<p class="text-sm" style="margin:8px 0 0;">A aula continua valendo nas contas até você excluí-la (botão <strong>Cancelar aula</strong>) ou mudar o status acima.</p>' : ''}
+      ${contact}
+      ${canSend ? `<div style="margin-top:10px;"><button type="button" class="btn btn-outline btn-sm" id="cd-send-confirm">${cls.confirm_wamid ? 'Reenviar aviso agora' : 'Enviar aviso agora'}</button></div>` : ''}
+    </div>`;
+}
+
+const CONFIRMATION_OPTIONS = [
+  { key: 'pendente', label: 'Pendente confirmação' },
+  { key: 'confirmada', label: 'Aula confirmada' },
+  { key: 'pedido_cancelamento', label: 'Pedido de cancelamento' },
+];
+
 async function openClassDetailModal(cls, onChanged) {
   const html = `
     <div class="modal-header"><h3>${escapeHtml(cls.subject_name)}</h3><button class="modal-close" id="cd-close">&times;</button></div>
@@ -334,6 +385,7 @@ async function openClassDetailModal(cls, onChanged) {
       <div><div class="text-sm muted">Aluno paga</div><p class="tabular">${formatCurrency(cls.student_value)} ${cls.student_paid ? '<span class="badge badge-confirmed">Recebido</span>' : '<span class="badge badge-pending">Pendente</span>'}</p></div>
       <div><div class="text-sm muted">Professor recebe</div><p class="tabular">${formatCurrency(cls.teacher_value)}${cls.modality === 'presencial' && Number(cls.transport_value) > 0 ? ` + ${formatCurrency(cls.transport_value)} transporte` : ''}</p></div>
     </div>
+    ${confirmationSectionHtml(cls)}
     <div class="form-actions">
       <button class="btn btn-danger" id="cd-cancel-class">Cancelar aula</button>
       <button class="btn btn-outline" id="cd-edit">Editar</button>
@@ -341,6 +393,40 @@ async function openClassDetailModal(cls, onChanged) {
   `;
   const backdrop = openModal(html);
   backdrop.querySelector('#cd-close').onclick = closeModal;
+
+  // Status da confirmação: salva na hora, e a janela é reaberta com os dados novos.
+  const statusSelect = backdrop.querySelector('#cd-confirm-status');
+  if (statusSelect) {
+    statusSelect.addEventListener('change', async () => {
+      statusSelect.disabled = true;
+      try {
+        const resp = await api.put(`/api/classes/${cls.id}/confirmation`, { status: statusSelect.value });
+        showToast('Status da aula atualizado.');
+        onChanged();
+        openClassDetailModal(resp.class, onChanged);
+      } catch (err) {
+        showToast(err.message, 'error');
+        statusSelect.value = cls.confirmation_status;
+        statusSelect.disabled = false;
+      }
+    });
+  }
+  const sendBtn = backdrop.querySelector('#cd-send-confirm');
+  if (sendBtn) {
+    sendBtn.addEventListener('click', async () => {
+      const ok = await confirmModal('Enviar agora o aviso de confirmação desta aula pelo WhatsApp?', 'Enviar aviso');
+      if (!ok) { openClassDetailModal(cls, onChanged); return; }
+      try {
+        const resp = await api.post(`/api/classes/${cls.id}/send-confirmation`, {});
+        showToast('Aviso enviado pelo WhatsApp.');
+        onChanged();
+        openClassDetailModal(resp.class, onChanged);
+      } catch (err) {
+        showToast(err.message, 'error');
+        openClassDetailModal(cls, onChanged);
+      }
+    });
+  }
   backdrop.querySelector('#cd-edit').onclick = () => {
     closeModal();
     openClassFormModal({ existing: cls }, onChanged);
@@ -408,9 +494,9 @@ Pages.scheduling = async function (root) {
           return;
         }
         resultsEl.innerHTML = `<div class="time-slot-list">${results.map(c => `
-          <div class="slot" data-id="${c.id}">
+          <div class="slot${isCancelRequest(c) ? ' cancel-req' : ''}" data-id="${c.id}">
             <span class="time">${formatDate(c.start_time)}<br>${formatTime(c.start_time)}</span>
-            <span class="grow">${escapeHtml(c.student_name)} · ${escapeHtml(c.subject_name)} <span class="muted">com ${escapeHtml(c.teacher_name)}</span></span>
+            <span class="grow">${escapeHtml(c.student_name)} · ${escapeHtml(c.subject_name)} <span class="muted">com ${escapeHtml(c.teacher_name)}</span>${slotConfirmHtml(c)}</span>
             <span class="badge badge-neutral">${c.modality === 'online' ? 'Online' : 'Presencial'}</span>
           </div>`).join('')}</div>`;
         resultsEl.querySelectorAll('.slot').forEach(el => {

@@ -6,6 +6,7 @@
 const { db } = require('../db');
 const { sendJson, httpError } = require('../router');
 const { requireStudentAuth } = require('./auth');
+const { stripForPortal } = require('../confirmation');
 
 function register(router) {
   router.get('/api/student-portal/me', async (req, res) => {
@@ -29,7 +30,8 @@ function register(router) {
     if (start) { sql += ' AND classes.start_time >= ?'; params.push(start); }
     if (end) { sql += ' AND classes.start_time <= ?'; params.push(end); }
     sql += ' ORDER BY classes.start_time';
-    sendJson(res, 200, db.prepare(sql).all(...params));
+    // A confirmação da aula (WhatsApp) é só da administração: não vai para a tela do aluno.
+    sendJson(res, 200, db.prepare(sql).all(...params).map(stripForPortal));
   });
 
   router.get('/api/student-portal/feedback', async (req, res) => {

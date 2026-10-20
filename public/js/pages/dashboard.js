@@ -31,6 +31,7 @@ Pages.dashboard = async function (root) {
       </div>
     </div>
 
+    <div id="wa-attention"></div>
     <div id="materials-space-alert"></div>
 
     <div class="stat-grid">
@@ -46,9 +47,9 @@ Pages.dashboard = async function (root) {
       ${todayClasses.length === 0 ? `<div class="empty-state"><div class="eyebrow">Nada por aqui</div>Nenhuma aula agendada para hoje.</div>` : `
       <div class="time-slot-list">
         ${todayClasses.map(c => `
-          <div class="slot">
+          <div class="slot${isCancelRequest(c) ? ' cancel-req' : ''}" data-class-id="${c.id}">
             <span class="time">${formatTime(c.start_time)}–${formatTime(c.end_time)}</span>
-            <span class="grow">${escapeHtml(c.student_name)} · ${escapeHtml(c.subject_name)} <span class="muted">com ${escapeHtml(c.teacher_name)}</span></span>
+            <span class="grow">${escapeHtml(c.student_name)} · ${escapeHtml(c.subject_name)} <span class="muted">com ${escapeHtml(c.teacher_name)}</span>${slotConfirmHtml(c)}</span>
             <span class="badge badge-neutral">${c.modality === 'online' ? 'Online' : 'Presencial'}</span>
           </div>
         `).join('')}
@@ -65,6 +66,61 @@ Pages.dashboard = async function (root) {
       </div>
     </div>
   `;
+
+  // Aula de hoje: clicar abre o detalhe (confirmação, contato do responsável, cancelar...).
+  root.querySelectorAll('.slot[data-class-id]').forEach((el) => {
+    el.style.cursor = 'pointer';
+    el.addEventListener('click', () => {
+      const cls = todayClasses.find((c) => String(c.id) === el.dataset.classId);
+      if (cls) openClassDetailModal(cls, () => Pages.dashboard(root));
+    });
+  });
+
+  // Avisos da confirmação por WhatsApp: pedidos de cancelamento em aberto (vermelho) e avisos que não saíram (amarelo).
+  api.get('/api/whatsapp/attention').then((att) => {
+    const slot = document.getElementById('wa-attention');
+    if (!slot) return;
+    const rows = (list, extra) => list.map((c) => `
+      <div class="slot${isCancelRequest(c) ? ' cancel-req' : ''}" data-attn-id="${c.id}">
+        <span class="time">${formatDate(c.start_time)}<br>${formatTime(c.start_time)}</span>
+        <span class="grow"><strong>${escapeHtml(c.student_name)}</strong> · ${escapeHtml(c.subject_name)} <span class="muted">com ${escapeHtml(c.teacher_name)}</span>
+          <div class="text-sm muted">${extra(c)}</div></span>
+        <button type="button" class="btn btn-outline btn-sm" data-open-class="${c.id}">Abrir</button>
+      </div>`).join('');
+    const contact = (c) => {
+      const toStudent = c.confirmer === 'aluno';
+      const phone = toStudent ? c.student_phone : c.guardian_phone;
+      const name = toStudent ? c.student_name : c.guardian_name;
+      const link = whatsappLink(phone);
+      return `${toStudent ? 'Aluno' : 'Responsável'}${name ? ': ' + escapeHtml(name) : ''}` +
+        `${phone ? ' · ' + (link ? `<a href="${escapeHtml(link)}" target="_blank" rel="noopener noreferrer">${escapeHtml(phone)}</a>` : escapeHtml(phone)) : ' · sem telefone'}`;
+    };
+    let html = '';
+    if (att.cancelRequests.length > 0) {
+      html += `
+        <div class="card card-alert" id="wa-cancel-card">
+          <div class="card-header"><h2>⚠️ Pedidos de cancelamento (${att.cancelRequests.length})</h2></div>
+          <p class="text-sm" style="margin:0 0 10px;">O responsável (ou o aluno) respondeu <strong>Não</strong> no WhatsApp. Entre em contato para ver a situação: a aula continua valendo nas contas e nas estatísticas até você <strong>excluí-la</strong> ou mudar o status dela.</p>
+          <div class="time-slot-list">${rows(att.cancelRequests, (c) => `${contact(c)}${c.confirmation_updated_at ? ' · pedido em ' + escapeHtml(formatDateTime(c.confirmation_updated_at)) : ''}`)}</div>
+        </div>`;
+    }
+    if (att.sendProblems.length > 0) {
+      html += `
+        <div class="card" id="wa-problem-card">
+          <div class="card-header"><h2>Avisos de confirmação que não saíram (${att.sendProblems.length})</h2>
+            <a href="#/whatsapp" class="btn btn-outline btn-sm">Ver página WhatsApp</a></div>
+          <div class="time-slot-list">${rows(att.sendProblems, (c) => `<span class="confirm-error">${escapeHtml(c.confirm_error)}</span>`)}</div>
+        </div>`;
+    }
+    slot.innerHTML = html;
+    const all = att.cancelRequests.concat(att.sendProblems);
+    slot.querySelectorAll('[data-open-class]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const cls = all.find((c) => String(c.id) === btn.dataset.openClass);
+        if (cls) openClassDetailModal(cls, () => Pages.dashboard(root));
+      });
+    });
+  }).catch(() => {});
 
   // Aviso quando o espaço dos materiais está acabando. Não atrapalha o painel se der qualquer erro.
   api.get('/api/admin/materials?limit=1').then(({ usage }) => {

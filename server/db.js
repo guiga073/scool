@@ -233,6 +233,26 @@ CREATE TABLE IF NOT EXISTS lead_subjects (
   PRIMARY KEY (lead_id, subject_id)
 );
 
+-- Histórico das mensagens do WhatsApp (as que o sistema envia e as que chegam). Serve para ligar uma
+-- resposta ("Sim"/"Não") à aula certa, evitar processar duas vezes a mesma mensagem e mostrar para a
+-- administração o que aconteceu. Guarda telefones (dados pessoais): as linhas com mais de 90 dias são
+-- apagadas sozinhas (ver server/whatsapp/scheduler.js).
+CREATE TABLE IF NOT EXISTS wa_messages (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  direction TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  class_id INTEGER REFERENCES classes(id) ON DELETE SET NULL,
+  phone TEXT,
+  wamid TEXT,
+  status TEXT,
+  detail TEXT,
+  created_at TEXT DEFAULT (datetime('now', 'localtime')),
+  updated_at TEXT DEFAULT (datetime('now', 'localtime'))
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_wa_messages_wamid ON wa_messages(wamid) WHERE wamid IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_wa_messages_class ON wa_messages(class_id);
+CREATE INDEX IF NOT EXISTS idx_wa_messages_created ON wa_messages(created_at);
+
 CREATE TABLE IF NOT EXISTS recurring_expenses (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   description TEXT NOT NULL,
@@ -278,6 +298,25 @@ ensureColumn('teachers', 'hourly_rate_online', 'REAL');
 ensureColumn('teachers', 'transport_value', 'REAL DEFAULT 10');
 ensureColumn('classes', 'transport_value', 'REAL DEFAULT 0');
 ensureColumn('expenses', 'recurring_expense_id', 'INTEGER REFERENCES recurring_expenses(id)');
+// Confirmação das aulas pelo WhatsApp (ver server/whatsapp/ e server/confirmation.js).
+// "confirmation_status" é um campo À PARTE do "status" da aula ('scheduled'/'cancelled'): um pedido de
+// cancelamento NÃO tira a aula das contas e das estatísticas — só avisa a administração, que decide.
+//   confirmation_status: 'pendente' (padrão) | 'confirmada' | 'pedido_cancelamento'
+//   confirmation_source: quem definiu o valor atual — 'whatsapp' | 'automatico' | 'admin' (vazio = padrão)
+//   confirm_sent_at / confirm_wamid: o aviso de confirmação foi enviado (e o código da mensagem na Meta)
+//   confirm_error: por que o aviso não foi enviado/entregue (a administração vê isso na aula)
+ensureColumn('classes', 'confirmation_status', "TEXT NOT NULL DEFAULT 'pendente'");
+ensureColumn('classes', 'confirmation_source', 'TEXT');
+ensureColumn('classes', 'confirmation_updated_at', 'TEXT');
+ensureColumn('classes', 'confirm_sent_at', 'TEXT');
+ensureColumn('classes', 'confirm_wamid', 'TEXT');
+ensureColumn('classes', 'confirm_error', 'TEXT');
+ensureColumn('classes', 'confirm_attempts', 'INTEGER NOT NULL DEFAULT 0');
+ensureColumn('classes', 'confirm_last_try_at', 'TEXT');
+db.exec('CREATE INDEX IF NOT EXISTS idx_classes_confirmation ON classes(confirmation_status, start_time)');
+// Quem recebe o aviso de confirmação: 'responsavel' (padrão) ou, em casos específicos, o próprio 'aluno'.
+ensureColumn('students', 'confirmer', "TEXT NOT NULL DEFAULT 'responsavel'");
+
 
 // Links de aula antigos: antes o link era salvo exatamente como digitado, e um link sem
 // "https://" (ex.: "meet.google.com/abc") não abre pelo link da aula — o navegador
