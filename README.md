@@ -671,6 +671,7 @@ não consegue ver nada, mesmo digitando o endereço na mão.
 | **Telefone**, **E-mail**, **Endereço** | opcionais; na ficha, o telefone e o e-mail viram links (ligar / escrever) |
 | **Disciplinas que poderia lecionar** | a mesma lista de disciplinas dos professores; dá para criar uma disciplina nova ali mesmo |
 | **Valor por hora que pretende receber** | presencial e online; é só uma referência para você — não entra em nenhuma conta nem preenche o agendamento sozinho |
+| **Valor de transporte** | quanto a pessoa pede por aula presencial; também só uma referência para você (o transporte do professor contratado é configurado na ficha dele) |
 | **Disponibilidade** | a mesma grade de Segunda a Domingo, das 8h às 20h, dos professores; é só uma anotação |
 | **Currículo** | um arquivo por talento (veja "Currículo — limites e tipos") |
 | **Observações** | texto livre de até 5.000 caracteres: como conheceu a pessoa, impressões da entrevista, o que combinaram… |

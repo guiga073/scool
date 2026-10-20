@@ -126,17 +126,19 @@ function cleanNotes(value) {
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // Valor por hora é opcional; se vier preenchido, precisa ser um número válido, de zero para cima.
-function cleanRate(value) {
+// O mesmo vale para o valor de transporte (label muda só a mensagem de erro).
+function cleanRate(value, label) {
+  const msg = (label || 'Valor por hora') + ' inválido';
   if (value === undefined || value === null) return null;
   let n;
   if (typeof value === 'number') n = value;
   else if (typeof value === 'string') {
     const s = value.trim();
     if (s === '') return null;
-    if (!/^(?:\d+(?:[.,]\d*)?|[.,]\d+)$/.test(s)) throw httpError(400, 'Valor por hora inválido'); // "50", "50,5", "50.5", ".5"
+    if (!/^(?:\d+(?:[.,]\d*)?|[.,]\d+)$/.test(s)) throw httpError(400, msg); // "50", "50,5", "50.5", ".5"
     n = Number(s.replace(',', '.'));
-  } else throw httpError(400, 'Valor por hora inválido');
-  if (!Number.isFinite(n) || n < 0 || n > MAX_RATE) throw httpError(400, 'Valor por hora inválido');
+  } else throw httpError(400, msg);
+  if (!Number.isFinite(n) || n < 0 || n > MAX_RATE) throw httpError(400, msg);
   return Math.round(n * 100) / 100;
 }
 
@@ -221,6 +223,7 @@ function parseInput(body, partial) {
   if (want('address')) out.address = cleanLine(body.address, LIMITS.address, 'O endereço');
   if (want('hourly_rate_presencial')) out.hourly_rate_presencial = cleanRate(body.hourly_rate_presencial);
   if (want('hourly_rate_online')) out.hourly_rate_online = cleanRate(body.hourly_rate_online);
+  if (want('transport_value')) out.transport_value = cleanRate(body.transport_value, 'Valor de transporte');
   if (want('availability_grid')) {
     const grid = cleanGrid(body.availability_grid);
     out.availability_grid = grid ? JSON.stringify(grid) : null;
@@ -274,6 +277,7 @@ function toJson(row, subjects, full) {
     address: row.address,
     hourly_rate_presencial: row.hourly_rate_presencial,
     hourly_rate_online: row.hourly_rate_online,
+    transport_value: row.transport_value,
     has_notes: !!row.notes,
     has_availability: !!row.availability_grid,
     subjects,
@@ -360,9 +364,9 @@ function create(body) {
   const v = parseInput(body, false);
   const id = inTransaction(() => {
     const info = db.prepare(`
-      INSERT INTO talents (name, phone, email, address, availability_grid, hourly_rate_presencial, hourly_rate_online, notes)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(v.name, v.phone, v.email, v.address, v.availability_grid, v.hourly_rate_presencial, v.hourly_rate_online, v.notes);
+      INSERT INTO talents (name, phone, email, address, availability_grid, hourly_rate_presencial, hourly_rate_online, transport_value, notes)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(v.name, v.phone, v.email, v.address, v.availability_grid, v.hourly_rate_presencial, v.hourly_rate_online, v.transport_value, v.notes);
     const newId = Number(info.lastInsertRowid);
     setSubjects(newId, v.subject_ids);
     return newId;
@@ -370,7 +374,7 @@ function create(body) {
   return get(id);
 }
 
-const COLUMNS = ['name', 'phone', 'email', 'address', 'availability_grid', 'hourly_rate_presencial', 'hourly_rate_online', 'notes'];
+const COLUMNS = ['name', 'phone', 'email', 'address', 'availability_grid', 'hourly_rate_presencial', 'hourly_rate_online', 'transport_value', 'notes'];
 
 function update(id, body) {
   if (!db.prepare('SELECT 1 FROM talents WHERE id = ?').get(id)) throw httpError(404, MSG.naoEncontrado);

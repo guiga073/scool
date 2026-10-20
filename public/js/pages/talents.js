@@ -134,6 +134,12 @@ window.Pages = window.Pages || {};
           </div>
         </div>
 
+        <div class="field">
+          <label for="tl-transport">Valor de transporte (R$ por aula presencial)</label>
+          <div class="hint" style="margin-top:-2px; margin-bottom:8px;">Só aparece para você — quanto a pessoa pede para se deslocar.</div>
+          <input type="number" step="0.01" min="0" id="tl-transport" value="${rate(t.transport_value)}" placeholder="Ex.: 10">
+        </div>
+
         <div class="field"><label>Disponibilidade</label>
           <div class="hint" style="margin-top:-2px;">É só uma anotação dos horários em que a pessoa disse poder dar aula.</div>
           <div id="tl-availability-grid" style="margin-top:8px;"></div>
@@ -243,6 +249,7 @@ window.Pages = window.Pages || {};
         subject_ids: Array.from(selectedIds),
         hourly_rate_presencial: $('#tl-rate-presencial').value,
         hourly_rate_online: $('#tl-rate-online').value,
+        transport_value: $('#tl-transport').value,
         availability_grid: gridApi.getValue(),
         notes: $('#tl-notes').value,
       };
@@ -362,6 +369,7 @@ window.Pages = window.Pages || {};
       const parts = [];
       if (t.hourly_rate_presencial !== null && t.hourly_rate_presencial !== undefined) parts.push(`Presencial ${formatCurrency(t.hourly_rate_presencial)}`);
       if (t.hourly_rate_online !== null && t.hourly_rate_online !== undefined) parts.push(`Online ${formatCurrency(t.hourly_rate_online)}`);
+      if (t.transport_value !== null && t.transport_value !== undefined) parts.push(`Transporte ${formatCurrency(t.transport_value)}`);
       if (parts.length === 0) return '<span class="muted text-sm">—</span>';
       return parts.map((p) => `<div class="tabular" style="white-space:nowrap;">${escapeHtml(p)}</div>`).join('');
     }
@@ -448,6 +456,7 @@ window.Pages = window.Pages || {};
           <div><div class="text-sm muted">Valor/hora pretendido — Presencial</div><p class="tabular">${moneyOrDash(talent.hourly_rate_presencial)}</p></div>
           <div><div class="text-sm muted">Valor/hora pretendido — Online</div><p class="tabular">${moneyOrDash(talent.hourly_rate_online)}</p></div>
         </div>
+        <div><div class="text-sm muted">Transporte por aula presencial (pretendido)</div><p class="tabular">${moneyOrDash(talent.transport_value)}</p></div>
         <div><div class="text-sm muted">Cadastrado em</div><p class="mb-0">${escapeHtml(formatDate(talent.created_at))}</p></div>
       `;
       cardDados.querySelector('#edit-talent-btn').addEventListener('click', () => {

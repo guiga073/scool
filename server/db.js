@@ -292,6 +292,8 @@ ensureColumn('students', 'password_hash', 'TEXT');
 ensureColumn('students', 'grade_level', 'TEXT');
 ensureColumn('teachers', 'hourly_rate_presencial', 'REAL');
 ensureColumn('teachers', 'hourly_rate_online', 'REAL');
+// Talentos: valor de transporte pretendido (sem padrão: vazio = não informado).
+ensureColumn('talents', 'transport_value', 'REAL');
 // DEFAULT 10 aqui não é só para professores novos: o SQLite também usa esse valor
 // para preencher a coluna em quem já estava cadastrado, então isso já deixa
 // R$10 configurado para todo mundo que já existia no banco.
