@@ -933,7 +933,22 @@ Veja a seção de problemas do GUIA-WHATSAPP.md.
 
 ---
 
-## 10. Solução de problemas
+## 10. Termos de uso e política de privacidade do portal
+
+O portal tem duas páginas públicas, em `public/termos.html` (**Termos de Uso**) e `public/privacidade.html`
+(**Política de Privacidade**), com os endereços `/termos.html` e `/privacidade.html`. Elas abrem sem login e
+aparecem em: tela de login (rodapé do cartão), menu lateral da administração, e rodapé das áreas do professor e do
+aluno. A área do aluno também leva aos **Termos de Aulas** do site público (`olimais.com.br/termos-de-aula.html`).
+
+- **São um modelo base**, escrito para o que o portal faz hoje (dados guardados, quem vê o quê, WhatsApp, retenção de
+  90 dias do histórico, sessão de 30 dias). Peça a revisão de um(a) advogado(a). Se mudar o funcionamento do sistema
+  (por exemplo, novos dados guardados), atualize o texto e a data no topo.
+- Para editar, abra os arquivos em um editor de texto e troque as frases (o texto está direto no HTML).
+- O site público tem versões próprias (Termos de Uso, Política de Privacidade e Termos de Aulas) no pacote do site.
+
+---
+
+## 11. Solução de problemas
 
 - **"Cannot find module 'node:sqlite'" ou erro parecido ao iniciar** — a versão do
   Node em uso é anterior à 22.5. Confira em Settings do serviço (Railway/Render) se dá
@@ -974,7 +989,7 @@ Veja a seção de problemas do GUIA-WHATSAPP.md.
 
 ---
 
-## 11. Estrutura do projeto
+## 12. Estrutura do projeto
 
 ```
 server/           todo o backend (servidor, banco de dados, regras de negócio, rotas)
@@ -999,6 +1014,8 @@ server/           todo o backend (servidor, banco de dados, regras de negócio, 
 public/            todo o frontend (HTML/CSS/JS puro, sem build)
   index.html         estrutura principal do site (depois do login, para a secretaria)
   login.html         tela de login
+  termos.html        Termos de Uso do portal (pública)
+  privacidade.html   Política de Privacidade do portal (pública)
   professor.html     área exclusiva de cada professor logado
   aluno.html         área exclusiva de cada aluno logado
   assets/            arquivos da identidade visual (ver nota abaixo)
