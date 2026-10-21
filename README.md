@@ -267,16 +267,12 @@ possível por um terminal (Shell) no painel da Railway, substituindo o arquivo
   liberado** — usuário/e-mail e senha deixam de existir, e você pode cadastrar outra
   pessoa com o mesmo usuário ou e-mail sem problema.
 - **Interessados** — página própria no menu (logo abaixo de Alunos), **só para a administração**:
-  o controle dos pais e responsáveis que entram em contato, perguntam sobre as aulas e ainda não
-  agendam nada, para você retomar a conversa mais tarde. Cada interessado guarda o nome do
-  responsável, telefone/WhatsApp, e-mail, nome e série do aluno, disciplinas e modalidade de
-  interesse, como conheceu a Olimais, a **situação** (Novo, Em conversa, Retornar depois, Virou
-  aluno ou Sem interesse), a data do primeiro contato, uma **data de retorno** e as suas
-  **observações**. Só o nome é obrigatório. A lista tem busca (nome, telefone, aluno,
-  observações, disciplina…) e filtros por situação e por disciplina, e avisa **Hoje** ou
-  **Atrasado** quando chega a data de retorno de um caso em aberto; a ficha deixa trocar a
-  situação e editar as observações na hora. Professores e alunos não veem nada disso. Campos,
-  backup e cuidados com os dados pessoais: seção 8.
+  o controle dos pais e responsáveis que entram em contato, perguntam sobre as aulas e não fecham,
+  para você retomar a conversa mais tarde. Cada interessado guarda o nome do responsável,
+  telefone/WhatsApp, nome do aluno, disciplinas de interesse, como conheceu a Olimais, a **data do
+  último contato**, o **motivo de não fechamento** (Valor, Interno da Olimais ou Outros) e as suas
+  **observações**. Só o nome é obrigatório. A lista tem busca e filtros por motivo e por disciplina.
+  Professores e alunos não veem nada disso. Detalhes: seção 8.
 - **Professores** — cadastro com disciplinas e PIX. Na lista você procura **por nome ou
   por disciplina**: digite na caixa de busca (ela acha o nome e também a disciplina, sem
   se importar com acento ou maiúscula — "matematica" acha quem dá Matemática) e/ou
@@ -329,11 +325,11 @@ possível por um terminal (Shell) no painel da Railway, substituindo o arquivo
 - **Banco de talentos** — página própria no menu, **só para a administração**: o lugar para
   guardar os potenciais professores que você talvez queira contratar no futuro. Cada talento
   tem praticamente os mesmos dados de um professor — nome, telefone, e-mail, endereço,
-  disciplinas que poderia lecionar, valor por hora que pretende receber (presencial e online)
-  e disponibilidade —, mais o **currículo** (um arquivo anexado) e um campo de
+  disciplinas que poderia lecionar, valor por hora que pretende receber (presencial e online),
+  valor de transporte e disponibilidade —, mais o **currículo** (um arquivo anexado) e um campo de
   **observações** para as suas anotações (como conheceu a pessoa, impressões da entrevista…).
-  Login, senha, PIX e transporte ficam de fora, porque só fazem sentido quando a pessoa é
-  contratada. A lista tem busca (nome, disciplina, contato, observações) e filtro por
+  Também guarda o **valor de transporte** pretendido. Login, senha e PIX ficam de fora, porque só
+  fazem sentido quando a pessoa é contratada. A lista tem busca (nome, disciplina, contato, observações) e filtro por
   disciplina; a ficha mostra tudo, abre ou baixa o currículo e deixa editar as observações na
   hora. Professores e alunos não veem nada disso. Limites, tipos de arquivo, backup e cuidados
   com os dados pessoais: seção 7.
@@ -676,7 +672,7 @@ não consegue ver nada, mesmo digitando o endereço na mão.
 | **Currículo** | um arquivo por talento (veja "Currículo — limites e tipos") |
 | **Observações** | texto livre de até 5.000 caracteres: como conheceu a pessoa, impressões da entrevista, o que combinaram… |
 
-**Ficam de fora de propósito:** login e senha, PIX e transporte. Só fazem sentido quando a
+**Ficam de fora de propósito:** login e senha e PIX. Só fazem sentido quando a
 pessoa é contratada, e assim você não guarda dados de acesso nem de pagamento de quem ainda
 não trabalha com você.
 
@@ -684,7 +680,7 @@ não trabalha com você.
 
 1. No menu, **Banco de talentos** → **+ Cadastrar talento**. Só o nome é obrigatório; o resto
    você preenche quando tiver. O currículo pode ser anexado já no cadastro ou depois, pela ficha.
-2. A **lista** mostra nome, disciplinas, contato, valor/hora pretendido e se há currículo. A
+2. A **lista** mostra nome, disciplinas, contato, valores pretendidos (hora e transporte) e se há currículo. A
    caixa de busca procura em nome, disciplinas, telefone, e-mail, endereço, observações e no
    nome do arquivo do currículo, sem diferenciar maiúsculas nem acentos ("jose" acha "José");
    ao lado há um filtro por disciplina. Clique numa linha para abrir a ficha.
@@ -744,6 +740,88 @@ endereço, currículo, as suas impressões). Boas práticas simples:
   as observações com isso em mente;
 - se a política de privacidade do site não menciona candidatos a professor, vale incluir (ela
   ainda é só um modelo, e o ideal é um advogado revisar — eu não sou advogado).
+
+### Decisões que tomei por você (e como mudar cada uma)
+
+1. **Só a administração vê.** As regras de acesso ficam todas num lugar só, o arquivo comentado
+   `server/routes/talents.js`.
+2. **Um currículo por talento**, guardado no banco (e não numa pasta), pelos motivos acima.
+3. **Sem "status" do candidato** (entrevistado, aprovado, descartado…): as observações cobrem
+   isso. Se quiser um campo de status com filtro na lista, dá para acrescentar.
+4. **Remover é definitivo** (com confirmação): não há lixeira.
+5. **Login e PIX ficam de fora**, como explicado acima. Os valores pretendidos (hora e transporte)
+   são só anotação: não preenchem nada no cadastro de professor.
+
+### Problemas comuns
+
+- **"O espaço reservado aos currículos (200 MB) está cheio"** — remova currículos que não usa
+  mais (ficha do talento → **Remover currículo**) ou aumente `TALENTS_CV_TOTAL_MB`.
+- **"Grande demais … o máximo é 5 MB"** — exporte o PDF de novo com qualidade menor, comprima
+  as imagens ou aumente `TALENTS_CV_MAX_MB`.
+- **"O conteúdo deste arquivo não confere com o tipo dele"** — o arquivo está corrompido ou foi
+  renomeado (por exemplo, uma imagem chamada `.pdf`). Abra e salve de novo no formato certo.
+- **O talento foi salvo, mas o currículo não subiu** — acontece quando a internet cai ou o
+  servidor recusa o arquivo no meio do cadastro. Os dados **não se perdem**: você cai na ficha
+  do talento, com o motivo numa mensagem em vermelho, e é só anexar o currículo de novo ali.
+- **A busca não acha uma pessoa** — ela procura em nome, disciplinas, telefone, e-mail,
+  endereço, observações e nome do arquivo do currículo (não *dentro* do currículo) e usa só os
+  100 primeiros caracteres do que for digitado.
+- **Depois de publicar a atualização:** as tabelas e colunas novas são criadas sozinhas na
+  primeira vez que o servidor liga; nada do que já existia é alterado.
+
+---
+
+## 8. Controle de interessados — como funciona e cuidados
+
+**O que é.** Uma lista privada dos pais e responsáveis que entraram em contato, perguntaram sobre
+as aulas e, pelo menos nesse primeiro contato, não fecharam. Serve para você não perder esses
+contatos e poder retomá-los depois (começo de semestre, época de prova, uma promoção…).
+Aparece no menu da secretaria como **Interessados** (logo abaixo de Alunos) e é **exclusivo da
+administração**: não existe nenhuma tela, aba ou link disso na área do professor ou do aluno, e o
+servidor confere o login de administração em toda chamada.
+
+### O que dá para guardar
+
+| Campo | Observação |
+|---|---|
+| **Nome do responsável** | o **único obrigatório** (até 120 caracteres) |
+| **Telefone / WhatsApp** | opcional; na ficha, vira link |
+| **Nome do aluno** | opcional |
+| **Disciplinas de interesse** | a mesma lista de disciplinas do sistema; dá para criar uma disciplina nova ali mesmo |
+| **Como conheceu a Olimais** | Instagram, Site, Google, Indicação, WhatsApp, Facebook ou Outro |
+| **Data do último contato** | já vem com o dia de hoje; dá para mudar ou apagar |
+| **Motivo de não fechamento** | opcional: Valor, Interno da Olimais ou Outros |
+| **Observações** | texto livre de até 5.000 caracteres |
+
+Desde a v15 **não existem mais** os campos e-mail, série do aluno, modalidade, situação, data do
+primeiro contato e "retornar em" (as colunas antigas continuam no banco, sem uso; nada foi apagado).
+Na atualização, a data do último contato de quem já existia foi preenchida com a antiga data do
+primeiro contato (ou com a data do cadastro).
+
+### Como usar
+
+1. No menu, **Interessados** → **+ Cadastrar interessado**. Só o nome é obrigatório.
+2. A **lista** mostra responsável, telefone, disciplinas, último contato e motivo, do último contato
+   mais recente para o mais antigo (sem data vão para o fim). A busca procura em nome, telefone,
+   aluno, observações, disciplinas, motivo e origem, sem diferenciar maiúsculas nem acentos; ao lado
+   há filtros por **motivo** (inclusive "sem motivo") e por **disciplina**.
+3. A **ficha** reúne os dados (**Editar**), o acompanhamento — o **motivo** muda ali mesmo numa caixa
+   de escolha, e o botão **Registrar contato hoje** atualiza o último contato — e as observações
+   (**Editar** → **Salvar observações**).
+4. **Remover**, no alto da ficha, apaga de vez o cadastro, depois de uma confirmação.
+5. **Quando o interessado vira aluno:** cadastre o aluno normalmente em **Alunos** (o sistema não
+   copia os dados sozinho) e, se quiser, remova o interessado.
+
+### Onde ficam os dados e o backup
+
+Ficam no próprio banco de dados (tabelas `leads` e `lead_subjects`), por isso entram no **"Baixar
+backup dos dados"**. É só texto: não há limite de quantidade a considerar.
+
+### Cuidados com os dados pessoais
+
+São dados pessoais de pais e de crianças de gente que ainda não é sua cliente. Guarde só o que usa,
+remova quem pediu para sair, identifique-se ao retomar o contato e lembre que backups antigos ainda
+contêm o que foi removido. Pela LGPD, a pessoa pode pedir para ver ou apagar o que você guardou.
 
 ### Decisões que tomei por você (e como mudar cada uma)
 
@@ -895,7 +973,7 @@ server/           todo o backend (servidor, banco de dados, regras de negócio, 
   links.js          regra dos links (aula online e materiais): sempre https://
   materials.js      arquivos dos materiais: limites, tipos aceitos, gravação e download
   talents.js        banco de talentos: conferência dos campos, busca e currículo (guardado no banco)
-  leads.js          controle de interessados: conferência dos campos, situações, busca e retorno
+  leads.js          controle de interessados: conferência dos campos, motivos, busca e último contato
   services.js        regras de negócio: quinzenas, conflitos, faturas, recorrência
   auth.js            login/senha/sessão
   router.js          roteador HTTP simples (sem framework)
