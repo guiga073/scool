@@ -378,9 +378,9 @@ async function receiveFile(req, opts) {
     try {
       const title = cleanTitle(opts.title) || name.replace(/\.[^.]*$/, '').slice(0, MAX_TITLE);
       const info = db.prepare(`
-        INSERT INTO materials (student_id, teacher_id, uploader_type, kind, title, note, original_name, stored_name, size)
-        VALUES (?, ?, ?, 'file', ?, ?, ?, ?, ?)
-      `).run(opts.studentId, opts.teacherId, opts.uploaderType, title, cleanNote(opts.note) || null, name, storedName, declared);
+        INSERT INTO materials (student_id, teacher_id, subject_id, uploader_type, kind, title, note, original_name, stored_name, size)
+        VALUES (?, ?, ?, ?, 'file', ?, ?, ?, ?, ?)
+      `).run(opts.studentId, opts.teacherId, opts.subjectId, opts.uploaderType, title, cleanNote(opts.note) || null, name, storedName, declared);
       return getMaterial(info.lastInsertRowid);
     } catch (err) {
       fs.rmSync(finalPath, { force: true });
@@ -404,19 +404,20 @@ function addLink(opts) {
     try { title = new URL(r.value).hostname.replace(/^www\./, ''); } catch (e) { title = 'Link'; }
   }
   const info = db.prepare(`
-    INSERT INTO materials (student_id, teacher_id, uploader_type, kind, title, note, url)
-    VALUES (?, ?, ?, 'link', ?, ?, ?)
-  `).run(opts.studentId, opts.teacherId, opts.uploaderType, title, cleanNote(opts.note) || null, r.value);
+    INSERT INTO materials (student_id, teacher_id, subject_id, uploader_type, kind, title, note, url)
+    VALUES (?, ?, ?, ?, 'link', ?, ?, ?)
+  `).run(opts.studentId, opts.teacherId, opts.subjectId, opts.uploaderType, title, cleanNote(opts.note) || null, r.value);
   return getMaterial(info.lastInsertRowid);
 }
 
 // ---------- Consultas ----------
 
 const SELECT_BASE = `
-  SELECT m.*, s.name AS student_name, t.name AS teacher_name
+  SELECT m.*, s.name AS student_name, t.name AS teacher_name, sub.name AS subject_name
   FROM materials m
   JOIN students s ON s.id = m.student_id
-  JOIN teachers t ON t.id = m.teacher_id`;
+  JOIN teachers t ON t.id = m.teacher_id
+  LEFT JOIN subjects sub ON sub.id = m.subject_id`;
 
 function asId(value) {
   const n = Number(value);
@@ -430,10 +431,13 @@ function getMaterial(id) {
 }
 
 // Todos os materiais de um aluno (de todos os professores), ou só os de um professor.
-function listForStudent(studentId, teacherId) {
+// subject: undefined = todas as disciplinas; null = só os sem disciplina (antigos); número = só aquela disciplina.
+function listForStudent(studentId, teacherId, subject) {
   const params = [studentId];
   let where = 'WHERE m.student_id = ?';
   if (teacherId) { where += ' AND m.teacher_id = ?'; params.push(teacherId); }
+  if (subject === null) where += ' AND m.subject_id IS NULL';
+  else if (subject !== undefined) { where += ' AND m.subject_id = ?'; params.push(subject); }
   return db.prepare(`${SELECT_BASE} ${where} ORDER BY m.created_at DESC, m.id DESC`).all(...params);
 }
 
@@ -443,14 +447,15 @@ function adminList({ q, sort, limit, offset }) {
   let where = '';
   if (q) {
     const like = `%${String(q).replace(/[\\%_]/g, '\\$&')}%`;
-    where = `WHERE (m.title LIKE ? ESCAPE '\\' OR m.original_name LIKE ? ESCAPE '\\' OR s.name LIKE ? ESCAPE '\\' OR t.name LIKE ? ESCAPE '\\')`;
-    params.push(like, like, like, like);
+    where = `WHERE (m.title LIKE ? ESCAPE '\\' OR m.original_name LIKE ? ESCAPE '\\' OR s.name LIKE ? ESCAPE '\\' OR t.name LIKE ? ESCAPE '\\' OR sub.name LIKE ? ESCAPE '\\')`;
+    params.push(like, like, like, like, like);
   }
   const order = sort === 'size' ? 'm.size DESC, m.id DESC' : 'm.created_at DESC, m.id DESC';
   const total = db.prepare(`
     SELECT COUNT(*) AS c FROM materials m
     JOIN students s ON s.id = m.student_id
-    JOIN teachers t ON t.id = m.teacher_id ${where}`).get(...params).c;
+    JOIN teachers t ON t.id = m.teacher_id
+    LEFT JOIN subjects sub ON sub.id = m.subject_id ${where}`).get(...params).c;
   const items = db.prepare(`${SELECT_BASE} ${where} ORDER BY ${order} LIMIT ? OFFSET ?`).all(...params, limit, offset);
   return { items, total };
 }
@@ -467,6 +472,8 @@ function toDto(row) {
     student_name: row.student_name,
     teacher_id: row.teacher_id,
     teacher_name: row.teacher_name,
+    subject_id: row.subject_id || null,
+    subject_name: row.subject_id ? (row.subject_name || 'Disciplina removida') : null,
     uploader_type: row.uploader_type,
     uploader_name: row.uploader_type === 'teacher' ? row.teacher_name : row.student_name,
     file_name: row.original_name || null,
@@ -478,21 +485,37 @@ function toDto(row) {
   };
 }
 
+// limitBytes: o limite REAL dos materiais agora = o que já foi usado + o que ainda cabe. É o menor entre o
+// teto configurado (MATERIALS_MAX_TOTAL_MB) e o que o disco permite sem passar da reserva de MATERIALS_MIN_FREE_MB.
+// limitedByDisk avisa a tela quando quem manda é o disco (volume menor que o teto).
 function getUsage() {
   const counts = db.prepare("SELECT SUM(kind = 'file') AS files, SUM(kind = 'link') AS links FROM materials").get();
   const disk = diskInfo();
+  const used = getUsedBytes();
+  const remaining = remainingBytes();
+  const capLeft = MAX_TOTAL_BYTES - used - reservedBytes;
+  const diskLeft = disk && MIN_FREE_BYTES > 0 ? disk.freeBytes - MIN_FREE_BYTES - reservedBytes : Infinity;
   return {
-    usedBytes: getUsedBytes(),
+    usedBytes: used,
     reservedBytes,
     capBytes: MAX_TOTAL_BYTES,
+    limitBytes: used + reservedBytes + remaining,
+    limitedByDisk: diskLeft < capLeft,
+    minFreeBytes: MIN_FREE_BYTES,
     maxFileBytes: MAX_FILE_BYTES,
-    remainingBytes: remainingBytes(),
+    remainingBytes: remaining,
     diskFreeBytes: disk ? disk.freeBytes : null,
     diskTotalBytes: disk ? disk.totalBytes : null,
     fileCount: counts.files || 0,
     linkCount: counts.links || 0,
     studentUploads: studentUploadsEnabled(),
   };
+}
+
+// Define a disciplina de um material (usado para os materiais antigos, sem disciplina).
+function setSubject(id, subjectId) {
+  db.prepare('UPDATE materials SET subject_id = ? WHERE id = ?').run(subjectId, id);
+  return getMaterial(id);
 }
 
 // ---------- Apagar ----------
@@ -581,6 +604,7 @@ module.exports = {
   fmtBytes,
   init,
   getUsage,
+  setSubject,
   remainingBytes,
   receiveFile,
   addLink,

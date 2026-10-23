@@ -124,12 +124,13 @@ Pages.dashboard = async function (root) {
 
   // Aviso quando o espaço dos materiais está acabando. Não atrapalha o painel se der qualquer erro.
   api.get('/api/admin/materials?limit=1').then(({ usage }) => {
-    const pct = usage.capBytes ? (usage.usedBytes / usage.capBytes) * 100 : 0;
+    const limit = usage.limitBytes !== undefined ? usage.limitBytes : usage.capBytes;
+    const pct = usage.remainingBytes <= 0 ? 100 : (limit ? (usage.usedBytes / limit) * 100 : 0);
     const slot = document.getElementById('materials-space-alert');
     if (!slot || pct < 80) return;
     slot.innerHTML = `
       <div class="alert ${pct >= 95 ? 'alert-danger' : 'alert-warn'}">
-        <div>O espaço de <strong>materiais</strong> está em ${Math.round(pct)}% (${escapeHtml(formatBytes(usage.usedBytes))} de ${escapeHtml(formatBytes(usage.capBytes))}).
+        <div>O espaço de <strong>materiais</strong> está em ${Math.round(pct)}% (${escapeHtml(formatBytes(usage.usedBytes))} de ${escapeHtml(formatBytes(limit))}).
         Quando encher, ninguém consegue enviar novos arquivos. <a href="#/materiais">Ver materiais</a></div>
       </div>`;
   }).catch(() => {});

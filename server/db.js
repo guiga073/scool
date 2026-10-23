@@ -330,6 +330,37 @@ if (!db.prepare("SELECT 1 FROM settings WHERE key = 'leads.v15_migrated'").get()
   db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('leads.v15_migrated', '1')").run();
 }
 
+// Materiais por disciplina (v19): cada material pertence ao trio aluno + professor + disciplina.
+// Os materiais antigos (sem disciplina) são distribuídos UMA vez: se o par aluno–professor tem uma
+// única disciplina nas aulas agendadas (ou, sem nenhuma agendada, em todas as aulas), o material vai
+// para ela. Quando há mais de uma, fica sem disciplina ("não definida") até o professor ou a secretaria
+// escolher, pela tela de materiais. Nada é apagado.
+ensureColumn('materials', 'subject_id', 'INTEGER');
+db.exec('CREATE INDEX IF NOT EXISTS idx_materials_track ON materials(student_id, teacher_id, subject_id)');
+if (!db.prepare("SELECT 1 FROM settings WHERE key = 'materials.v19_subject_migrated'").get()) {
+  const pairs = db.prepare('SELECT DISTINCT student_id, teacher_id FROM materials WHERE subject_id IS NULL').all();
+  const subjectsOf = db.prepare(`
+    SELECT DISTINCT subject_id FROM classes
+    WHERE student_id = ? AND teacher_id = ? AND (? = 0 OR status = 'scheduled')`);
+  const setSubject = db.prepare('UPDATE materials SET subject_id = ? WHERE student_id = ? AND teacher_id = ? AND subject_id IS NULL');
+  let moved = 0;
+  db.exec('BEGIN');
+  try {
+    for (const p of pairs) {
+      let subs = subjectsOf.all(p.student_id, p.teacher_id, 1);
+      if (subs.length === 0) subs = subjectsOf.all(p.student_id, p.teacher_id, 0);
+      if (subs.length === 1) moved += setSubject.run(subs[0].subject_id, p.student_id, p.teacher_id).changes;
+    }
+    db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('materials.v19_subject_migrated', '1')").run();
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
+  }
+  const left = db.prepare('SELECT COUNT(*) AS c FROM materials WHERE subject_id IS NULL').get().c;
+  if (moved || left) console.log(`[materiais] Disciplina definida automaticamente em ${moved} material(is); ${left} ficaram com disciplina "não definida" (o professor ou a secretaria escolhe na tela).`);
+}
+
 
 // Links de aula antigos: antes o link era salvo exatamente como digitado, e um link sem
 // "https://" (ex.: "meet.google.com/abc") não abre pelo link da aula — o navegador

@@ -5,6 +5,8 @@
 //   - área do aluno: vê tudo que recebeu e pode enviar para os professores dele.
 // Quem pode o quê é decidido pelo servidor (server/routes/materials.js); aqui a tela só
 // mostra/esconde botões e avisa os problemas antes de gastar tempo enviando.
+// Desde a v19, cada material pertence a aluno + professor + DISCIPLINA: a escolha mostra
+// "Aluno — Disciplina" / "Professor — Disciplina" e as listas são separadas por disciplina.
 
 const MaterialsPanel = (function () {
   // ---------- Arquivos: conferência antes do envio ----------
@@ -39,6 +41,8 @@ const MaterialsPanel = (function () {
 
   function plural(n, one, many) { return `${n} ${n === 1 ? one : many}`; }
 
+  function subjectLabel(m) { return m.subject_id ? m.subject_name : 'Disciplina não definida'; }
+
   // ---------- Lista de materiais ----------
 
   function byLine(m, viewer) {
@@ -58,7 +62,12 @@ const MaterialsPanel = (function () {
       ? `<div class="mat-meta">${materialLinkHtml(m.url)}</div>`
       : `<div class="mat-meta">${escapeHtml(m.file_name)} · ${formatBytes(m.size)}</div>`;
     const people = o.showPeople
-      ? `<div class="mat-meta">Aluno: <a href="#/alunos/${Number(m.student_id)}">${escapeHtml(m.student_name)}</a> · Professor: ${escapeHtml(m.teacher_name)}</div>`
+      ? `<div class="mat-meta">Aluno: <a href="#/alunos/${Number(m.student_id)}">${escapeHtml(m.student_name)}</a> · Professor: ${escapeHtml(m.teacher_name)} · Disciplina: ${escapeHtml(subjectLabel(m))}</div>`
+      : '';
+    // Material antigo, sem disciplina: professor do par e secretaria escolhem para qual disciplina mover.
+    const move = !m.subject_id && m.move_options && m.move_options.length
+      ? `<div class="mat-move"><label class="text-sm" for="mat-move-${id}">Mover para a disciplina:</label>
+           <select id="mat-move-${id}" data-move="${id}"><option value="">Escolha…</option>${m.move_options.map((op) => `<option value="${Number(op.id)}">${escapeHtml(op.name)}</option>`).join('')}</select></div>`
       : '';
     const actions = [];
     if (!isLink) {
@@ -75,12 +84,13 @@ const MaterialsPanel = (function () {
           ${people}
           <div class="mat-by">${byLine(m, o.viewer)}</div>
           ${m.note ? `<p class="mat-note">${escapeHtml(m.note)}</p>` : ''}
+          ${move}
         </div>
         ${actions.length ? `<div class="mat-actions">${actions.join('')}</div>` : ''}
       </div>`;
   }
 
-  // Desenha a lista (agrupada por professor, quando pedido) e liga o botão "Apagar".
+  // Desenha a lista (agrupada por professor + disciplina, quando pedido) e liga "Apagar" e "Mover".
   // o: { viewer, showPeople, groupByTeacher, emptyHtml, onChanged }
   function renderItems(listEl, items, o) {
     if (items.length === 0) {
@@ -90,15 +100,37 @@ const MaterialsPanel = (function () {
     if (o.groupByTeacher) {
       const groups = new Map();
       for (const m of items) {
-        if (!groups.has(m.teacher_id)) groups.set(m.teacher_id, { name: m.teacher_name, items: [] });
-        groups.get(m.teacher_id).items.push(m);
+        const key = `${m.teacher_id}:${m.subject_id || 'none'}`;
+        if (!groups.has(key)) groups.set(key, { teacher: m.teacher_name, subject: subjectLabel(m), legacy: !m.subject_id, items: [] });
+        groups.get(key).items.push(m);
       }
-      listEl.innerHTML = Array.from(groups.values()).map((g) => `
-        <h3 class="mat-group-title">Professor: ${escapeHtml(g.name)} <span class="muted text-sm">(${g.items.length})</span></h3>
+      // Ordem: professor, depois disciplina (as "não definidas" por último).
+      const ordered = Array.from(groups.values()).sort((a, b) => a.teacher.localeCompare(b.teacher, 'pt-BR') || (a.legacy - b.legacy) || a.subject.localeCompare(b.subject, 'pt-BR'));
+      listEl.innerHTML = ordered.map((g) => `
+        <h3 class="mat-group-title">${escapeHtml(g.subject)} <span class="muted">· Professor: ${escapeHtml(g.teacher)}</span> <span class="muted text-sm">(${g.items.length})</span></h3>
+        ${g.legacy ? '<p class="text-sm muted mat-legacy-note">Enviados antes da separação por disciplina. O professor ou a secretaria podem mover cada um para a disciplina certa.</p>' : ''}
         <div class="mat-list">${g.items.map((m) => itemHtml(m, o)).join('')}</div>`).join('');
     } else {
       listEl.innerHTML = `<div class="mat-list">${items.map((m) => itemHtml(m, o)).join('')}</div>`;
     }
+    listEl.querySelectorAll('[data-move]').forEach((sel) => {
+      sel.addEventListener('change', async () => {
+        if (!sel.value) return;
+        const name = sel.options[sel.selectedIndex].text;
+        sel.disabled = true;
+        try {
+          await api.put(`/api/materials/${sel.dataset.move}/subject`, { subjectId: Number(sel.value) });
+          showToast(`Material movido para ${name}.`);
+        } catch (err) {
+          if (err.status === 401) { window.location.href = '/login.html'; return; }
+          showToast(err.message, 'error');
+          sel.disabled = false;
+          sel.value = '';
+          return;
+        }
+        if (o.onChanged) o.onChanged();
+      });
+    });
     listEl.querySelectorAll('[data-del]').forEach((btn) => {
       btn.addEventListener('click', async () => {
         const m = items.find((x) => x.id === Number(btn.dataset.del));
@@ -139,12 +171,14 @@ const MaterialsPanel = (function () {
     const accept = config.allowedExtensions.map((e) => `.${e}`).join(',');
     const state = { mode: 'file', queue: [], busy: false, batchSize: 0, controller: null, nextId: 1, remaining: config.remainingBytes };
 
+    // Aluno escolhe "professor — disciplina" (cada combinação é uma pasta separada); o professor já entrou
+    // pela pasta "aluno — disciplina", então só mostra para onde vai.
     const targetHtml = viewer === 'student'
       ? (targets.length === 1
-        ? `<p class="mat-target">Para: <strong>${escapeHtml(targets[0].name)}</strong></p>`
-        : `<div class="field"><label for="mat-target-${uid}">Para qual professor?</label>
-             <select id="mat-target-${uid}" data-target>${targets.map((t) => `<option value="${Number(t.id)}">${escapeHtml(t.name)}</option>`).join('')}</select></div>`)
-      : `<p class="mat-target">Para: <strong>${escapeHtml(ctx.studentName)}</strong></p>`;
+        ? `<p class="mat-target">Para: <strong>${escapeHtml(targets[0].teacher_name)}</strong> · Disciplina: <strong>${escapeHtml(targets[0].subject_name)}</strong></p>`
+        : `<div class="field"><label for="mat-target-${uid}">Para qual professor e disciplina?</label>
+             <select id="mat-target-${uid}" data-target>${targets.map((t, i) => `<option value="${i}">${escapeHtml(t.teacher_name)} — ${escapeHtml(t.subject_name)}</option>`).join('')}</select></div>`)
+      : `<p class="mat-target">Para: <strong>${escapeHtml(ctx.studentName)}</strong> · Disciplina: <strong>${escapeHtml(ctx.subjectName)}</strong></p>`;
 
     slot.innerHTML = `
       <div class="mat-box" data-box>
@@ -202,10 +236,12 @@ const MaterialsPanel = (function () {
     const titleInput = $('[data-title]');
     const noteInput = $('[data-note]');
 
-    function selectedTeacherId() {
-      if (viewer !== 'student') return null;
+    // { teacherId, subjectId } do destino escolhido.
+    function selectedTarget() {
+      if (viewer !== 'student') return { teacherId: null, subjectId: ctx.subjectId };
       const sel = $('[data-target]');
-      return sel ? Number(sel.value) : Number(targets[0].id);
+      const t = targets[sel ? Number(sel.value) : 0];
+      return { teacherId: Number(t.teacher_id), subjectId: Number(t.subject_id) };
     }
 
     function readyCount() { return state.queue.filter((q) => q.status === 'ready').length; }
@@ -277,8 +313,9 @@ const MaterialsPanel = (function () {
     async function startUpload() {
       const ready = state.queue.filter((q) => q.status === 'ready');
       if (ready.length === 0 || state.busy) return;
-      const teacherId = selectedTeacherId();
-      const query = viewer === 'teacher' ? `studentId=${encodeURIComponent(ctx.studentId)}` : `teacherId=${encodeURIComponent(teacherId)}`;
+      const dest = selectedTarget();
+      const query = (viewer === 'teacher' ? `studentId=${encodeURIComponent(ctx.studentId)}` : `teacherId=${encodeURIComponent(dest.teacherId)}`)
+        + `&subjectId=${encodeURIComponent(dest.subjectId)}`;
       const note = noteInput.value.trim();
       const title = ready.length === 1 ? titleInput.value.trim() : '';
 
@@ -392,7 +429,9 @@ const MaterialsPanel = (function () {
         title: $('[data-link-title]').value.trim(),
         note: $('[data-link-note]').value.trim(),
       };
-      if (viewer === 'teacher') body.studentId = ctx.studentId; else body.teacherId = selectedTeacherId();
+      const dest = selectedTarget();
+      if (viewer === 'teacher') body.studentId = ctx.studentId; else body.teacherId = dest.teacherId;
+      body.subjectId = dest.subjectId;
       sendLinkBtn.disabled = true;
       try {
         await api.post('/api/materials/link', body);
@@ -415,10 +454,12 @@ const MaterialsPanel = (function () {
   // ---------- Montagem do painel ----------
 
   // container: elemento DOM.
-  // opts: { viewer: 'admin'|'teacher'|'student', studentId, studentName, title, onBack }
+  // opts: { viewer: 'admin'|'teacher'|'student', studentId, studentName, subjectId, subjectName, title, onBack }
+  //   professor: subjectId é a disciplina da pasta aberta, ou null para os materiais antigos sem disciplina.
   async function mount(container, opts) {
     const viewer = opts.viewer;
-    const ctx = { viewer, studentId: opts.studentId, studentName: opts.studentName || '' };
+    const ctx = { viewer, studentId: opts.studentId, studentName: opts.studentName || '', subjectId: opts.subjectId, subjectName: opts.subjectName || '' };
+    const legacyFolder = viewer === 'teacher' && !opts.subjectId;
     container.innerHTML = '<div class="loading-dots">Carregando…</div>';
 
     let config;
@@ -451,7 +492,10 @@ const MaterialsPanel = (function () {
     async function loadList() {
       let items;
       try {
-        items = await api.get('/api/materials' + (viewer === 'student' ? '' : `?studentId=${encodeURIComponent(ctx.studentId)}`));
+        let url = '/api/materials';
+        if (viewer !== 'student') url += `?studentId=${encodeURIComponent(ctx.studentId)}`;
+        if (viewer === 'teacher') url += `&subjectId=${legacyFolder ? 'none' : encodeURIComponent(ctx.subjectId)}`;
+        items = await api.get(url);
       } catch (err) {
         if (err.status === 401) { window.location.href = '/login.html'; return; }
         listEl.innerHTML = `<div class="alert alert-danger">Não foi possível carregar a lista: ${escapeHtml(err.message)}</div>`;
@@ -492,32 +536,42 @@ const MaterialsPanel = (function () {
       }
     }
 
-    renderUploadBox(container.querySelector('[data-slot="upload"]'), ctx, config, targets, loadList);
+    const uploadSlot = container.querySelector('[data-slot="upload"]');
+    if (legacyFolder) {
+      uploadSlot.innerHTML = '<div class="alert alert-info">Estes materiais foram enviados antes da separação por disciplina. Escolha, em cada um, para qual disciplina ele vai. Para enviar materiais novos, volte e abra a pasta da disciplina.</div>';
+    } else {
+      renderUploadBox(uploadSlot, ctx, config, targets, loadList);
+    }
     await loadList();
   }
 
-  // Professor: lista dos alunos dele; clicar abre os materiais daquele aluno.
+  // Professor: uma linha por aluno + disciplina (cada uma é uma pasta separada); clicar abre aquela pasta.
+  // Alunos com materiais antigos sem disciplina ganham também uma linha "Disciplina não definida".
   async function renderStudentPicker(container, onPick) {
     container.innerHTML = '<div class="loading-dots">Carregando…</div>';
-    let students;
+    let tracks;
     try {
-      students = await api.get('/api/materials/targets');
+      tracks = await api.get('/api/materials/targets');
     } catch (err) {
       if (err.status === 401) { window.location.href = '/login.html'; return; }
       container.innerHTML = `<div class="alert alert-danger">Não foi possível carregar seus alunos: ${escapeHtml(err.message)}</div>`;
       return;
     }
-    if (students.length === 0) {
+    if (tracks.length === 0) {
       container.innerHTML = '<div class="empty-state"><div class="eyebrow">Nenhum aluno ainda</div>Assim que houver uma aula agendada com um aluno, ele aparece aqui.</div>';
       return;
     }
     container.innerHTML = `
+      <p class="text-sm muted">Cada aluno aparece uma vez para cada disciplina que você dá para ele. Os materiais de cada disciplina ficam separados.</p>
       <div class="table-wrap"><table>
-        <thead><tr><th>Aluno</th><th></th></tr></thead>
-        <tbody>${students.map((s) => `<tr class="row-link" data-id="${Number(s.id)}"><td><strong>${escapeHtml(s.name)}</strong></td><td class="muted text-sm">Ver materiais &rarr;</td></tr>`).join('')}</tbody>
+        <thead><tr><th>Aluno</th><th>Disciplina</th><th></th></tr></thead>
+        <tbody>${tracks.map((t, i) => `<tr class="row-link" data-i="${i}">
+          <td><strong>${escapeHtml(t.student_name)}</strong></td>
+          <td>${t.subject_id ? escapeHtml(t.subject_name) : `<span class="muted">Disciplina não definida</span> <span class="badge">${plural(t.legacy_count, 'material antigo', 'materiais antigos')}</span>`}</td>
+          <td class="muted text-sm">Ver materiais &rarr;</td></tr>`).join('')}</tbody>
       </table></div>`;
-    container.querySelectorAll('tr[data-id]').forEach((tr) => {
-      tr.addEventListener('click', () => onPick(students.find((s) => String(s.id) === tr.dataset.id)));
+    container.querySelectorAll('tr[data-i]').forEach((tr) => {
+      tr.addEventListener('click', () => onPick(tracks[Number(tr.dataset.i)]));
     });
   }
 

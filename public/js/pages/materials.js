@@ -48,7 +48,9 @@ Pages.materials = async function (root) {
   const switchEl = root.querySelector('#mat-student-uploads');
 
   function renderUsage(u) {
-    const pct = u.capBytes ? (u.usedBytes / u.capBytes) * 100 : 0;
+    // Limite real (o menor entre o teto configurado e o que o disco do servidor permite).
+    const limit = u.limitBytes !== undefined ? u.limitBytes : u.capBytes;
+    const pct = u.remainingBytes <= 0 ? 100 : (limit ? (u.usedBytes / limit) * 100 : 0);
     const shown = pct > 0 && pct < 1 ? '< 1' : String(Math.round(pct));
     const level = pct >= 95 ? 'crit' : pct >= 80 ? 'warn' : '';
     const diskLow = u.diskFreeBytes !== null && u.diskFreeBytes < 300 * 1000 * 1000;
@@ -59,14 +61,14 @@ Pages.materials = async function (root) {
       alerts += `<div class="alert alert-warn">Atenção: o espaço de materiais já passou de 80%. Vale apagar o que não é mais usado — ou planejar mais espaço (veja “Materiais” no README).</div>`;
     }
     if (diskLow) {
-      alerts += `<div class="alert alert-danger">O disco do servidor está com pouco espaço livre (${escapeHtml(formatBytes(u.diskFreeBytes))}). Por segurança, os envios são recusados quando restam menos de 200 MB, para o resto do portal continuar funcionando.</div>`;
+      alerts += `<div class="alert alert-danger">O disco do servidor está com pouco espaço livre (${escapeHtml(formatBytes(u.diskFreeBytes))}). Por segurança, os envios são recusados quando restam menos de ${escapeHtml(formatBytes(u.minFreeBytes || 0))}, para o resto do portal continuar funcionando. Para resolver, aumente o volume na Railway (veja “Materiais” no README).</div>`;
     }
     usageEl.innerHTML = `
       <div class="card">
         <div class="card-header"><h2>Espaço usado</h2></div>
-        <div class="mat-usage-numbers"><strong class="tabular">${escapeHtml(formatBytes(u.usedBytes))}</strong> de ${escapeHtml(formatBytes(u.capBytes))} <span class="muted">(${shown}%)</span></div>
+        <div class="mat-usage-numbers"><strong class="tabular">${escapeHtml(formatBytes(u.usedBytes))}</strong> de ${escapeHtml(formatBytes(limit))} <span class="muted">(${shown}%)</span></div>
         <div class="mat-usage-bar ${level}" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(pct)}" aria-label="Espaço de materiais usado"><i style="width:${Math.min(100, pct).toFixed(1)}%"></i></div>
-        <p class="text-sm muted" style="margin:0 0 12px;">${plural(u.fileCount, 'arquivo', 'arquivos')} · ${plural(u.linkCount, 'link', 'links')} · cada arquivo pode ter até ${escapeHtml(formatBytes(u.maxFileBytes))}.${u.diskTotalBytes ? ` Espaço livre no disco do servidor: ${escapeHtml(formatBytes(u.diskFreeBytes))} de ${escapeHtml(formatBytes(u.diskTotalBytes))}.` : ''}</p>
+        <p class="text-sm muted" style="margin:0 0 12px;">${plural(u.fileCount, 'arquivo', 'arquivos')} · ${plural(u.linkCount, 'link', 'links')} · cada arquivo pode ter até ${escapeHtml(formatBytes(u.maxFileBytes))}.${u.limitedByDisk ? ` <strong>O limite de agora é o disco do servidor</strong>, que é menor que o teto configurado de ${escapeHtml(formatBytes(u.capBytes))} (já descontada a reserva de ${escapeHtml(formatBytes(u.minFreeBytes || 0))} para o banco de dados).` : ''}${u.diskTotalBytes ? ` Espaço livre no disco do servidor: ${escapeHtml(formatBytes(u.diskFreeBytes))} de ${escapeHtml(formatBytes(u.diskTotalBytes))}.` : ''}</p>
         ${alerts}
         <div class="alert alert-info"><div><strong>Backup:</strong> o link “Baixar backup dos dados” (no menu) salva só o banco de dados — cadastros, aulas, pagamentos e a lista de materiais. Os <strong>arquivos</strong> dos materiais não entram nele: ficam só no servidor. As opções para protegê-los estão na seção “Materiais” do README.</div></div>
       </div>`;

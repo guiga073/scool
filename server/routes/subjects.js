@@ -24,6 +24,8 @@ function register(router) {
     requireAuth(req);
     const inUse = db.prepare('SELECT COUNT(*) c FROM classes WHERE subject_id = ?').get(req.params.id).c;
     if (inUse > 0) throw httpError(400, 'Não é possível excluir: há aulas registradas com esta disciplina');
+    const inMaterials = db.prepare('SELECT COUNT(*) c FROM materials WHERE subject_id = ?').get(req.params.id).c;
+    if (inMaterials > 0) throw httpError(400, 'Não é possível excluir: há materiais de aula guardados nesta disciplina');
     db.prepare('DELETE FROM subjects WHERE id = ?').run(req.params.id);
     sendJson(res, 200, { ok: true });
   });

@@ -74,12 +74,17 @@ async function renderAlunos(el) {
   );
 }
 
-// Materiais de aula: primeiro a lista de alunos; clicar abre os materiais daquele aluno (e o envio).
+// Materiais de aula: primeiro a lista "aluno — disciplina"; clicar abre os materiais daquela pasta (e o envio).
 function renderMateriais(el) {
   el.innerHTML = `<div class="card"><div id="prof-materials"></div></div>`;
   const host = document.getElementById('prof-materials');
-  const showStudents = () => MaterialsPanel.renderStudentPicker(host, (student) => {
-    MaterialsPanel.mount(host, { viewer: 'teacher', studentId: student.id, studentName: student.name, title: `Materiais — ${student.name}`, onBack: showStudents });
+  const showStudents = () => MaterialsPanel.renderStudentPicker(host, (t) => {
+    const subject = t.subject_id ? t.subject_name : 'disciplina não definida';
+    MaterialsPanel.mount(host, {
+      viewer: 'teacher', studentId: t.student_id, studentName: t.student_name,
+      subjectId: t.subject_id, subjectName: t.subject_name,
+      title: `Materiais — ${t.student_name} · ${subject}`, onBack: showStudents,
+    });
   });
   showStudents();
 }

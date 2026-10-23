@@ -627,6 +627,9 @@ table.avail-grid td.avail-on:hover { background: var(--primary-soft); }
 /* Lista de materiais */
 .mat-group-title { font-size: 16px; margin: 20px 0 8px 0; }
 .mat-group-title:first-child { margin-top: 4px; }
+.mat-legacy-note { margin: -4px 0 8px 0; }
+.mat-move { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
+.mat-move select { width: auto; max-width: 100%; min-height: 36px; }
 .mat-list { display: grid; gap: 10px; }
 .mat-item { display: flex; align-items: flex-start; gap: 14px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-m); padding: 12px 14px; }
 .mat-ext { flex: none; width: 48px; height: 48px; border-radius: 10px; display: flex; align-items: center; justify-content: center;

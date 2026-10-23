@@ -530,23 +530,37 @@ página **Materiais** no menu da secretaria (visão geral e espaço usado).
 
 | | Vê | Envia | Apaga |
 |---|---|---|---|
-| **Professor** | os materiais dos **seus** alunos (quem tem aula agendada com ele) | para os seus alunos | qualquer material dos seus alunos |
-| **Aluno** | tudo que é dele, de todos os professores | para os professores dele (se a secretaria deixar) | só o que ele mesmo enviou |
-| **Secretaria** | tudo | — (só vê e apaga) | qualquer material; ou todos de um aluno de uma vez |
+| **Professor** | os materiais dos **seus** alunos, separados por disciplina (só das disciplinas em que tem aula agendada com o aluno) | para os seus alunos, sempre numa disciplina | qualquer material das suas pastas |
+| **Aluno** | tudo que é dele, de todos os professores, agrupado por disciplina e professor | para os professores dele, escolhendo "professor — disciplina" (se a secretaria deixar) | só o que ele mesmo enviou |
+| **Secretaria** | tudo | — (só vê, apaga e define a disciplina dos materiais antigos) | qualquer material; ou todos de um aluno de uma vez |
 
-Os materiais pertencem ao **par aluno–professor**: o que o professor Marcos envia para a
-Carolina só aparece para a Carolina, para o Marcos e para a secretaria — nunca para outro
-aluno ou outro professor. O par existe enquanto houver ao menos **uma aula agendada** entre
-os dois (aula cancelada não conta). Se um professor deixar de ter aulas agendadas com um
-aluno, ele deixa de ver os materiais desse aluno; o aluno continua vendo os dele. Quem a
-pessoa é vem sempre do login, nunca de algo que o navegador informe.
+**Separação por disciplina (desde a v19).** Cada material pertence a um **trio: aluno + professor +
+disciplina**. Se o Marcos dá Matemática e Física para a Carolina, ele vê duas pastas separadas
+("Carolina — Matemática" e "Carolina — Física"), e o que entra numa nunca aparece na outra. A
+Carolina, na área dela, vê os materiais agrupados por disciplina e professor, e ao enviar escolhe
+"Marcos — Física", por exemplo. O trio existe enquanto houver ao menos **uma aula agendada** daquele
+aluno com aquele professor naquela disciplina (aula cancelada não conta). Se as aulas de Física acabarem,
+o professor deixa de ver a pasta de Física (a de Matemática continua), e o aluno continua vendo tudo que é
+dele. Quem a pessoa é vem sempre do login, nunca de algo que o navegador informe.
+
+**Materiais antigos (enviados antes da v19).** Na primeira vez que a v19 liga, cada material antigo vai
+sozinho para a disciplina do par quando aluno e professor só têm **uma** disciplina juntos. Quando têm mais de
+uma, o material fica como **"Disciplina não definida"**: aparece numa pasta própria na área do professor (com o
+aviso "materiais antigos") e num grupo próprio na área do aluno e na ficha do aluno. O professor do par (ou a
+secretaria, pela ficha do aluno → Materiais) escolhe em **"Mover para a disciplina"** para onde ele vai. Nada é
+apagado. O log do servidor diz quantos foram distribuídos e quantos ficaram sem disciplina.
 
 ### Limites
 
 - **50 MB por arquivo** e **4,5 GB no total** (todos os arquivos somados).
 - O portal também recusa novos envios quando o volume está com menos de **200 MB livres**: o
   banco de dados mora no mesmo volume e nunca pode ficar sem espaço.
-- Passou de 80% do teto: aparece um aviso no Painel inicial, e a barra da página Materiais
+- **A barra mostra o limite real**, que é o menor entre o teto de 4,5 GB e o que o disco do servidor
+  ainda permite (o espaço livre menos a reserva de 200 MB). Se o volume da Railway for menor que o teto
+  (por exemplo, um volume de 0,5 GB criado no plano gratuito), a tela diz "O limite de agora é o disco do
+  servidor". Para resolver, aumente o volume na Railway (no plano Hobby, até 5 GB): abra o volume do
+  serviço e use a opção de aumentar o tamanho, ou peça ao suporte da Railway.
+- Passou de 80% do limite real: aparece um aviso no Painel inicial, e a barra da página Materiais
   muda de cor (amarela até 95%, vermelha depois).
 - Para mudar, defina variáveis de ambiente no serviço (Railway → Variables), em MB
   (1 MB = 1.000.000 bytes): `MATERIALS_MAX_FILE_MB` (padrão 50), `MATERIALS_MAX_TOTAL_MB`
@@ -589,8 +603,9 @@ não existe e material que a pessoa não pode ver dão a mesma resposta ("não e
 1. **Alunos também podem enviar** (não só professores). Para desligar: menu **Materiais** →
    desmarque "Permitir que os alunos enviem materiais". Os alunos continuam vendo e
    baixando o que receberam; só deixam de enviar.
-2. **Os materiais pertencem ao par aluno–professor** (tabela acima), e a secretaria só vê e
-   apaga (não envia). Todas as regras de permissão estão num único arquivo comentado,
+2. **Os materiais pertencem ao trio aluno–professor–disciplina** (tabela acima), e a secretaria só vê,
+   apaga e define a disciplina dos antigos (não envia). Só materiais **sem disciplina** podem ser movidos; um
+   material enviado na disciplina errada é apagado e enviado de novo na certa. Todas as regras de permissão estão num único arquivo comentado,
    `server/routes/materials.js`; se quiser outro modelo (por exemplo, materiais abertos a
    todos os alunos de uma turma), é ali que muda.
 3. **Os materiais ficam guardados até alguém apagar** — não há prazo de validade
@@ -643,8 +658,9 @@ no volume da Railway, e o backup de volume da Railway não funciona no plano Hob
   foi renomeado (por exemplo, uma imagem chamada `.pdf`). Abra e salve de novo no formato
   certo.
 - **Uma pessoa não vê um material que deveria ver** — confira se ainda existe uma aula
-  **agendada** entre o professor e o aluno (aulas canceladas não contam), e se o aluno e o
-  professor continuam ativos.
+  **agendada** entre o professor e o aluno **naquela disciplina** (aulas canceladas não contam), e se o aluno e o
+  professor continuam ativos. Se for um material antigo, veja se ele não está em "Disciplina não definida".
+- **Não consigo excluir uma disciplina** — além de aulas, a disciplina não pode ter materiais guardados nela.
 - **Depois de publicar a atualização:** as tabelas novas de Materiais são criadas sozinhas na
   primeira vez que o servidor liga; nada do que já existia é alterado.
 

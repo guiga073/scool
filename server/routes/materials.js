@@ -1,14 +1,20 @@
 // server/routes/materials.js
 // Materiais de aula: rotas e, principalmente, TODAS as regras de permissão num lugar só.
 //
-// Quem pode o quê (o "par" é aluno + professor com ao menos uma aula agendada, ambos ativos):
+// Desde a v19, cada material pertence a um TRIO: aluno + professor + disciplina. O trio "existe" enquanto
+// houver ao menos uma aula agendada (não cancelada) daquele aluno com aquele professor naquela disciplina,
+// com os dois ativos. Assim, um professor que dá Matemática e Física para o mesmo aluno tem duas pastas
+// separadas, e um material de uma nunca aparece na outra.
 //
-//                  ver                           enviar                       apagar
-//   secretaria     tudo                          (não envia por aqui)         qualquer material
-//   professor      só os do par dele com aluno   só no par dele com aluno     qualquer um do par dele
-//   aluno          só os próprios                só no par dele com professor*  só os que ele mesmo enviou
+//                  ver                                  enviar                         apagar
+//   secretaria     tudo                                 (não envia por aqui)           qualquer material
+//   professor      só os dos trios dele                 só num trio dele               qualquer um dos trios dele
+//   aluno          só os próprios (todas as disciplinas) só num trio dele*              só os que ele mesmo enviou
 //
 //   * o administrador pode desligar o envio pelos alunos (ajuste "studentUploads").
+//
+// Materiais antigos sem disciplina (subject_id NULL, de antes da v19) seguem a regra do PAR aluno–professor
+// e podem ser movidos para uma disciplina pelo professor do par ou pela secretaria (PUT .../subject).
 //
 // Quem é o professor/aluno vem SEMPRE do login, nunca de um número enviado pelo navegador:
 // o navegador só diz "com qual aluno/professor", e isso é conferido contra as aulas.
@@ -43,6 +49,47 @@ function activePair(studentId, teacherId) {
   return !!row;
 }
 
+// Aluno e professor ativos com ao menos uma aula agendada juntos NAQUELA disciplina.
+function activeTrack(studentId, teacherId, subjectId) {
+  const row = db.prepare(`
+    SELECT 1 FROM classes c
+    JOIN students s ON s.id = c.student_id AND s.active = 1
+    JOIN teachers t ON t.id = c.teacher_id AND t.active = 1
+    WHERE c.student_id = ? AND c.teacher_id = ? AND c.subject_id = ? AND c.status = 'scheduled'
+    LIMIT 1
+  `).get(studentId, teacherId, subjectId);
+  return !!row;
+}
+
+// Disciplina pedida pelo navegador: número, ou "none" para os materiais antigos sem disciplina.
+// Devolve undefined quando não veio nada.
+function parseSubject(value) {
+  if (value === undefined || value === null || value === '') return undefined;
+  if (value === 'none') return null;
+  const id = asId(value);
+  if (!id) throw httpError(400, 'Disciplina inválida.');
+  return id;
+}
+
+// O material está num trio (ou, se antigo, num par) que este professor ainda acompanha?
+function teacherOwns(user, row) {
+  if (row.teacher_id !== user.id) return false;
+  return row.subject_id ? activeTrack(row.student_id, user.id, row.subject_id) : activePair(row.student_id, user.id);
+}
+
+// Para onde um material antigo (sem disciplina) pode ser movido: as disciplinas do par.
+// Professor: só as disciplinas que ele ainda dá para o aluno. Secretaria: qualquer disciplina que o par já teve.
+function moveOptions(user, row) {
+  if (row.subject_id) return [];
+  if (user.type !== 'admin' && !(user.type === 'teacher' && row.teacher_id === user.id)) return [];
+  return db.prepare(`
+    SELECT DISTINCT sub.id, sub.name FROM classes c
+    JOIN subjects sub ON sub.id = c.subject_id
+    WHERE c.student_id = ? AND c.teacher_id = ? ${user.type === 'admin' ? '' : "AND c.status = 'scheduled'"}
+    ORDER BY sub.name
+  `).all(row.student_id, row.teacher_id);
+}
+
 // ---- Regras ----
 
 // De quem são os materiais que esta pessoa está pedindo para ver?
@@ -56,8 +103,14 @@ function resolveListScope(user, query) {
   if (user.type === 'teacher') {
     const studentId = asId(query.studentId);
     if (!studentId) throw httpError(400, 'Informe o aluno.');
-    if (!activePair(studentId, user.id)) throw httpError(403, 'Este aluno não está entre os seus');
-    return { studentId, teacherId: user.id };
+    const subject = parseSubject(query.subjectId);
+    if (subject === undefined) throw httpError(400, 'Escolha a disciplina.');
+    if (subject === null) {
+      if (!activePair(studentId, user.id)) throw httpError(403, 'Este aluno não está entre os seus');
+    } else if (!activeTrack(studentId, user.id, subject)) {
+      throw httpError(403, 'Você não tem aulas agendadas com este aluno nesta disciplina');
+    }
+    return { studentId, teacherId: user.id, subject };
   }
   return { studentId: user.id, teacherId: asId(query.teacherId) };
 }
@@ -67,30 +120,32 @@ function resolveWriteScope(user, params) {
   if (user.type === 'admin') {
     throw httpError(403, 'A secretaria não envia materiais por aqui. O envio é feito pelo professor ou pelo aluno.');
   }
+  const subjectId = parseSubject(params.subjectId);
+  if (!subjectId) throw httpError(400, 'Escolha a disciplina do material.');
   if (user.type === 'teacher') {
     const studentId = asId(params.studentId);
     if (!studentId) throw httpError(400, 'Informe o aluno.');
-    if (!activePair(studentId, user.id)) throw httpError(403, 'Este aluno não está entre os seus');
-    return { studentId, teacherId: user.id, uploaderType: 'teacher' };
+    if (!activeTrack(studentId, user.id, subjectId)) throw httpError(403, 'Você não tem aulas agendadas com este aluno nesta disciplina');
+    return { studentId, teacherId: user.id, subjectId, uploaderType: 'teacher' };
   }
   if (!mat.studentUploadsEnabled()) {
     throw httpError(403, 'O envio de materiais pelos alunos está desligado no momento. Peça ao seu professor para enviar.');
   }
   const teacherId = asId(params.teacherId);
   if (!teacherId) throw httpError(400, 'Escolha o professor.');
-  if (!activePair(user.id, teacherId)) throw httpError(403, 'Este professor não está entre os seus');
-  return { studentId: user.id, teacherId, uploaderType: 'student' };
+  if (!activeTrack(user.id, teacherId, subjectId)) throw httpError(403, 'Você não tem aulas agendadas com este professor nesta disciplina');
+  return { studentId: user.id, teacherId, subjectId, uploaderType: 'student' };
 }
 
 function canView(user, row) {
   if (user.type === 'admin') return true;
-  if (user.type === 'teacher') return row.teacher_id === user.id && activePair(row.student_id, user.id);
+  if (user.type === 'teacher') return teacherOwns(user, row);
   return user.type === 'student' && row.student_id === user.id;
 }
 
 function canDelete(user, row) {
   if (user.type === 'admin') return true;
-  if (user.type === 'teacher') return row.teacher_id === user.id && activePair(row.student_id, user.id);
+  if (user.type === 'teacher') return teacherOwns(user, row);
   return user.type === 'student' && row.student_id === user.id && row.uploader_type === 'student';
 }
 
@@ -104,9 +159,11 @@ function loadViewable(user, id) {
 function dtoFor(user, row, pairVerified) {
   let canDel;
   if (user.type === 'admin') canDel = true;
-  else if (user.type === 'teacher') canDel = row.teacher_id === user.id && (pairVerified || activePair(row.student_id, user.id));
+  else if (user.type === 'teacher') canDel = row.teacher_id === user.id && (pairVerified || teacherOwns(user, row));
   else canDel = row.student_id === user.id && row.uploader_type === 'student';
-  return { ...mat.toDto(row), can_delete: !!canDel };
+  const dto = { ...mat.toDto(row), can_delete: !!canDel };
+  if (!row.subject_id && user.type !== 'student') dto.move_options = moveOptions(user, row);
+  return dto;
 }
 
 // Título e observação vão em cabeçalhos HTTP (assim não aparecem no endereço), codificados com
@@ -167,27 +224,42 @@ function register(router) {
     });
   });
 
-  // Para quem a pessoa pode enviar: o aluno vê seus professores; o professor vê seus alunos.
+  // Para quem a pessoa pode enviar, por disciplina: o aluno vê "professor — disciplina"; o professor vê
+  // "aluno — disciplina". O professor também recebe uma linha por aluno com materiais antigos sem disciplina
+  // (subject_id null, com a contagem em legacy_count), para poder vê-los e movê-los.
   router.get('/api/materials/targets', async (req, res) => {
     const user = currentUser(req);
     if (user.type === 'student') {
       sendJson(res, 200, db.prepare(`
-        SELECT DISTINCT t.id, t.name FROM classes c
+        SELECT DISTINCT t.id AS teacher_id, t.name AS teacher_name, sub.id AS subject_id, sub.name AS subject_name FROM classes c
         JOIN teachers t ON t.id = c.teacher_id AND t.active = 1
         JOIN students s ON s.id = c.student_id AND s.active = 1
+        JOIN subjects sub ON sub.id = c.subject_id
         WHERE c.student_id = ? AND c.status = 'scheduled'
-        ORDER BY t.name
+        ORDER BY t.name, sub.name
       `).all(user.id));
       return;
     }
     if (user.type === 'teacher') {
-      sendJson(res, 200, db.prepare(`
-        SELECT DISTINCT s.id, s.name FROM classes c
+      const tracks = db.prepare(`
+        SELECT DISTINCT s.id AS student_id, s.name AS student_name, sub.id AS subject_id, sub.name AS subject_name FROM classes c
         JOIN students s ON s.id = c.student_id AND s.active = 1
         JOIN teachers t ON t.id = c.teacher_id AND t.active = 1
+        JOIN subjects sub ON sub.id = c.subject_id
         WHERE c.teacher_id = ? AND c.status = 'scheduled'
-        ORDER BY s.name
-      `).all(user.id));
+        ORDER BY s.name, sub.name
+      `).all(user.id);
+      const legacy = db.prepare(`
+        SELECT m.student_id, COUNT(*) AS n FROM materials m
+        WHERE m.teacher_id = ? AND m.subject_id IS NULL GROUP BY m.student_id
+      `).all(user.id);
+      const out = tracks.slice();
+      for (const l of legacy) {
+        const first = tracks.find((t) => t.student_id === l.student_id); // só alunos que ele ainda acompanha
+        if (first) out.push({ student_id: l.student_id, student_name: first.student_name, subject_id: null, subject_name: null, legacy_count: l.n });
+      }
+      out.sort((x, y) => x.student_name.localeCompare(y.student_name, 'pt-BR') || (x.subject_id === null) - (y.subject_id === null) || String(x.subject_name).localeCompare(String(y.subject_name), 'pt-BR'));
+      sendJson(res, 200, out);
       return;
     }
     sendJson(res, 200, []);
@@ -197,7 +269,7 @@ function register(router) {
   router.get('/api/materials', async (req, res) => {
     const user = currentUser(req);
     const scope = resolveListScope(user, req.query);
-    const rows = mat.listForStudent(scope.studentId, scope.teacherId);
+    const rows = mat.listForStudent(scope.studentId, scope.teacherId, scope.subject);
     sendJson(res, 200, rows.map((r) => dtoFor(user, r, true)));
   });
 
@@ -241,6 +313,18 @@ function register(router) {
       if (err && err.statusCode && !res.headersSent && isNavigation(req)) { sendErrorPage(res, err.statusCode, err.message); return; }
       throw err;
     }
+  });
+
+  // Move um material antigo (sem disciplina) para uma disciplina do par. Professor do par ou secretaria.
+  router.put('/api/materials/:id/subject', async (req, res) => {
+    const user = currentUser(req);
+    if (user.type === 'student') throw httpError(403, 'Só o professor ou a secretaria podem definir a disciplina.');
+    const row = loadViewable(user, req.params.id);
+    if (row.subject_id) throw httpError(409, 'Este material já tem disciplina.');
+    const subjectId = parseSubject((req.body || {}).subjectId);
+    if (!subjectId) throw httpError(400, 'Escolha a disciplina.');
+    if (!moveOptions(user, row).some((o) => o.id === subjectId)) throw httpError(400, 'Esta disciplina não é de nenhuma aula deste aluno com este professor.');
+    sendJson(res, 200, dtoFor(user, mat.setSubject(row.id, subjectId), false));
   });
 
   router.delete('/api/materials/:id', async (req, res) => {
