@@ -49,10 +49,12 @@ require('./routes/manual').register(router);
 require('./routes/talents').register(router);
 require('./routes/leads').register(router);
 require('./routes/whatsapp').register(router);
+require('./routes/freebies').register(router);
 
 // Materiais de aula: prepara a pasta no volume, limpa envios que ficaram pela metade e
 // arquivos sem registro no banco.
 require('./materials').init();
+require('./freebies').seed();
 
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 const PORT = process.env.PORT || 3000;

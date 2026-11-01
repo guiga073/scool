@@ -330,6 +330,60 @@ if (!db.prepare("SELECT 1 FROM settings WHERE key = 'leads.v15_migrated'").get()
   db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('leads.v15_migrated', '1')").run();
 }
 
+// Materiais gratuitos com cadastro (v21), ex.: Manual do ENEM. O PDF fica no volume (DATA_DIR/gratis), com nome
+// aleatório; quem baixa fica em free_leads (uma linha por e-mail) e cada pedido de download em free_downloads.
+// (Se a v20 chegou a ser publicada, as tabelas store_* dela continuam no banco, sem uso.)
+db.exec(`
+CREATE TABLE IF NOT EXISTS free_materials (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  slug TEXT NOT NULL UNIQUE,
+  name TEXT NOT NULL,
+  active INTEGER NOT NULL DEFAULT 0,
+  file_stored_name TEXT,
+  file_original_name TEXT,
+  file_size INTEGER NOT NULL DEFAULT 0,
+  max_downloads INTEGER NOT NULL DEFAULT 3,
+  link_days INTEGER NOT NULL DEFAULT 7,
+  created_at TEXT DEFAULT (datetime('now', 'localtime')),
+  updated_at TEXT DEFAULT (datetime('now', 'localtime'))
+);
+CREATE TABLE IF NOT EXISTS free_leads (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  email TEXT NOT NULL UNIQUE,
+  name TEXT NOT NULL,
+  phone TEXT NOT NULL,
+  contact_consent INTEGER NOT NULL DEFAULT 0,
+  consent_at TEXT,
+  privacy_accepted_at TEXT,
+  first_source TEXT,
+  status TEXT NOT NULL DEFAULT 'novo',
+  notes TEXT,
+  lead_id INTEGER,
+  requests INTEGER NOT NULL DEFAULT 0,
+  last_request_at TEXT,
+  created_at TEXT DEFAULT (datetime('now', 'localtime')),
+  updated_at TEXT DEFAULT (datetime('now', 'localtime'))
+);
+CREATE TABLE IF NOT EXISTS free_downloads (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  person_id INTEGER NOT NULL REFERENCES free_leads(id) ON DELETE CASCADE,
+  material_id INTEGER NOT NULL REFERENCES free_materials(id),
+  token TEXT NOT NULL UNIQUE,
+  source TEXT,
+  expires_at TEXT NOT NULL,
+  max_downloads INTEGER NOT NULL DEFAULT 3,
+  download_count INTEGER NOT NULL DEFAULT 0,
+  first_download_at TEXT,
+  last_download_at TEXT,
+  email_sent_at TEXT,
+  email_error TEXT,
+  created_at TEXT DEFAULT (datetime('now', 'localtime'))
+);
+CREATE INDEX IF NOT EXISTS idx_free_downloads_person ON free_downloads(person_id);
+CREATE INDEX IF NOT EXISTS idx_free_downloads_created ON free_downloads(created_at);
+CREATE INDEX IF NOT EXISTS idx_free_leads_created ON free_leads(created_at);
+`);
+
 // Materiais por disciplina (v19): cada material pertence ao trio aluno + professor + disciplina.
 // Os materiais antigos (sem disciplina) são distribuídos UMA vez: se o par aluno–professor tem uma
 // única disciplina nas aulas agendadas (ou, sem nenhuma agendada, em todas as aulas), o material vai

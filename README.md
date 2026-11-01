@@ -4,8 +4,8 @@ Sistema interno de gestão para o seu reforço escolar: cadastro de alunos e pro
 um controle de interessados (os pais que pediram informações e ainda não agendaram aula),
 um banco de talentos com os potenciais professores que você quer guardar para o futuro,
 agendamento de aulas com calendário, materiais de aula compartilhados entre professores
-e alunos, confirmação das aulas pelo WhatsApp Business, e controle de pagamentos (a receber dos alunos e a pagar aos professores,
-quinzenalmente).
+e alunos, confirmação das aulas pelo WhatsApp Business, controle de pagamentos (a receber dos alunos e a pagar aos professores,
+quinzenalmente) e o painel de quem baixou o Manual do ENEM gratuito do site.
 
 Este documento explica como testar o sistema no seu computador e, principalmente,
 **como colocá-lo no ar** para você e sua equipe usarem de verdade.
@@ -940,7 +940,46 @@ aluno. A área do aluno também leva aos **Termos de Aulas** do site público (`
 
 ---
 
-## 11. Solução de problemas
+## 11. Manual do ENEM grátis — cadastro, download e painel
+
+**Como funciona.** A página `olimais.com.br/manual-do-enem.html` (no **site**) tem um formulário: nome completo, e-mail,
+celular com DDD, o aceite da Política de Privacidade (obrigatório) e a autorização para a OLIMAIS entrar em contato
+(**opcional**, desmarcada, como pede a LGPD). Ao enviar, o site manda os dados para o **portal**
+(`POST /api/gratis/manual-enem`), que guarda a pessoa e devolve um link de download; o download começa na hora. Se o
+e-mail estiver configurado, o mesmo link vai também por e-mail. O link vale **7 dias** e permite **3 downloads**
+(ajustável); quem perder o link é só preencher de novo. Uma mesma pessoa (mesmo e-mail) não é duplicada: os pedidos
+seguintes entram no histórico dela.
+
+**Segurança.** O PDF fica numa pasta privada do volume (`/data/gratis`), nunca no site público: só sai pelo link
+gerado no cadastro. Só o site da OLIMAIS pode enviar o formulário (CORS); há um campo-armadilha para robôs e limite de
+10 cadastros seguidos por endereço de internet a cada 10 minutos. O celular é conferido (DDD válido, celular).
+
+**Painel → Downloads (Manual)** (menu, só administração):
+- **Visão geral:** pessoas cadastradas (total, no mês, no mês passado), downloads do arquivo, quantos autorizaram
+  contato, quantos **viraram alunos** (taxa de conversão), quem autorizou e ainda está como "Novo", novas pessoas por
+  semana, de onde vieram (origem), estados (pelo DDD) e os últimos cadastros.
+- **Pessoas:** busca (nome, e-mail, celular, observação), filtros por situação e por autorização de contato, planilha
+  **CSV** e botões para copiar celulares/e-mails **só de quem autorizou contato**. Em cada pessoa: situação (Novo,
+  Contatado, Virou aluno, Sem interesse), observações, **abrir conversa no WhatsApp** com mensagem pronta, copiar o
+  contato, **Adicionar aos Interessados** (cria o cadastro em Interessados, origem "Site") e **Apagar dados desta
+  pessoa** (pedido de exclusão pela LGPD), além do histórico de pedidos e downloads.
+- **Material:** enviar/trocar/abrir o PDF, **liberar/pausar** os downloads, limite e validade do link, endereço da
+  página no site. O "Manual do ENEM" já vem cadastrado, **pausado**: envie o PDF e libere.
+
+**Origem.** Para saber de onde as pessoas vêm, divulgue o link com `?origem=...`, por exemplo
+`olimais.com.br/manual-do-enem.html?origem=instagram` (bio), `?origem=whatsapp`, `?origem=story`. Sem isso, a
+página tenta descobrir pelo site de onde a pessoa veio (Google, Instagram…) ou marca "direto".
+
+**E-mail (opcional).** Variáveis `RESEND_API_KEY` e `MAIL_FROM` (de um domínio verificado no Resend; o Resend pede
+registros DNS **novos**, que não mexem nos atuais). Sem isso, tudo funciona: a pessoa baixa na hora, pela página.
+
+**Backup e LGPD.** Os cadastros ficam no banco e entram no "Baixar backup dos dados"; o PDF fica no volume (guarde o
+original). Quem **não autorizou** contato não deve receber mensagens de divulgação; o painel deixa isso visível. Se
+alguém pedir a exclusão, use "Apagar dados desta pessoa" (e descarte backups antigos, se for o caso).
+
+---
+
+## 12. Solução de problemas
 
 - **"Cannot find module 'node:sqlite'" ou erro parecido ao iniciar** — a versão do
   Node em uso é anterior à 22.5. Confira em Settings do serviço (Railway/Render) se dá
@@ -981,7 +1020,7 @@ aluno. A área do aluno também leva aos **Termos de Aulas** do site público (`
 
 ---
 
-## 12. Estrutura do projeto
+## 13. Estrutura do projeto
 
 ```
 server/           todo o backend (servidor, banco de dados, regras de negócio, rotas)
@@ -1000,6 +1039,8 @@ server/           todo o backend (servidor, banco de dados, regras de negócio, 
   assets/            arquivos entregues só depois do login (hoje: manual-aluno.pdf;
                      não confundir com public/assets/, que é pública)
   confirmation.js    status de confirmação das aulas (pendente/confirmada/pedido de cancelamento)
+  freebies.js        material gratuito com cadastro (Manual do ENEM): cadastro, link de download e números do painel
+  mail.js            envio de e-mail pelo Resend (opcional)
   whatsapp/          integração com o WhatsApp Business (API da Meta): config, telefones, modelos de
                      mensagem, cliente HTTP, regras de envio/resposta, webhook e relógio automático
   index.js           ponto de entrada — inicia o servidor
