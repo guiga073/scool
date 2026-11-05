@@ -327,6 +327,39 @@ function register(router) {
     sendJson(res, 200, dtoFor(user, mat.setSubject(row.id, subjectId), false));
   });
 
+  // Secretaria: para onde um material pode ir — os pares "professor — disciplina" do MESMO aluno que têm aula
+  // agendada (professor ativo). O destino atual fica de fora.
+  function destinations(row) {
+    return db.prepare(`
+      SELECT DISTINCT t.id AS teacher_id, t.name AS teacher_name, sub.id AS subject_id, sub.name AS subject_name FROM classes c
+      JOIN teachers t ON t.id = c.teacher_id AND t.active = 1
+      JOIN subjects sub ON sub.id = c.subject_id
+      WHERE c.student_id = ? AND c.status = 'scheduled'
+      ORDER BY t.name, sub.name
+    `).all(row.student_id).filter((d) => !(d.teacher_id === row.teacher_id && d.subject_id === row.subject_id));
+  }
+
+  router.get('/api/materials/:id/destinos', async (req, res) => {
+    const user = currentUser(req);
+    if (user.type !== 'admin') throw httpError(403, 'Só a secretaria pode mover materiais.');
+    const row = loadViewable(user, req.params.id);
+    sendJson(res, 200, destinations(row));
+  });
+
+  router.put('/api/materials/:id/destino', async (req, res) => {
+    const user = currentUser(req);
+    if (user.type !== 'admin') throw httpError(403, 'Só a secretaria pode mover materiais.');
+    const row = loadViewable(user, req.params.id);
+    const b = req.body || {};
+    const teacherId = asId(b.teacherId);
+    const subjectId = parseSubject(b.subjectId);
+    if (!teacherId || !subjectId) throw httpError(400, 'Escolha o professor e a disciplina de destino.');
+    if (!destinations(row).some((d) => d.teacher_id === teacherId && d.subject_id === subjectId)) {
+      throw httpError(400, 'Esse destino não vale: o aluno precisa ter aula agendada com esse professor nessa disciplina.');
+    }
+    sendJson(res, 200, dtoFor(user, mat.moveTo(row.id, teacherId, subjectId), false));
+  });
+
   router.delete('/api/materials/:id', async (req, res) => {
     const user = currentUser(req);
     const row = loadViewable(user, req.params.id);

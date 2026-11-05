@@ -532,7 +532,7 @@ página **Materiais** no menu da secretaria (visão geral e espaço usado).
 |---|---|---|---|
 | **Professor** | os materiais dos **seus** alunos, separados por disciplina (só das disciplinas em que tem aula agendada com o aluno) | para os seus alunos, sempre numa disciplina | qualquer material das suas pastas |
 | **Aluno** | tudo que é dele, de todos os professores, agrupado por disciplina e professor | para os professores dele, escolhendo "professor — disciplina" (se a secretaria deixar) | só o que ele mesmo enviou |
-| **Secretaria** | tudo | — (só vê, apaga e define a disciplina dos materiais antigos) | qualquer material; ou todos de um aluno de uma vez |
+| **Secretaria** | tudo | — (vê, **move** para outro professor/disciplina e apaga) | qualquer material; ou todos de um aluno de uma vez |
 
 **Separação por disciplina (desde a v19).** Cada material pertence a um **trio: aluno + professor +
 disciplina**. Se o Marcos dá Matemática e Física para a Carolina, ele vê duas pastas separadas
@@ -546,9 +546,19 @@ dele. Quem a pessoa é vem sempre do login, nunca de algo que o navegador inform
 **Materiais antigos (enviados antes da v19).** Na primeira vez que a v19 liga, cada material antigo vai
 sozinho para a disciplina do par quando aluno e professor só têm **uma** disciplina juntos. Quando têm mais de
 uma, o material fica como **"Disciplina não definida"**: aparece numa pasta própria na área do professor (com o
-aviso "materiais antigos") e num grupo próprio na área do aluno e na ficha do aluno. O professor do par (ou a
-secretaria, pela ficha do aluno → Materiais) escolhe em **"Mover para a disciplina"** para onde ele vai. Nada é
+aviso "materiais antigos") e num grupo próprio na área do aluno e na ficha do aluno. O professor do par escolhe em
+**"Mover para a disciplina"** para onde ele vai (a secretaria usa o botão **Mover**, abaixo). Nada é
 apagado. O log do servidor diz quantos foram distribuídos e quantos ficaram sem disciplina.
+
+**Mover um material para o professor certo (desde a v22).** Se o aluno mandou para a professora errada
+(ou na disciplina errada), a secretaria abre a **ficha do aluno → Materiais** (ou a página **Materiais**),
+clica em **Mover** no material e escolhe o destino "Professor — Disciplina". A lista mostra só os pares
+**do mesmo aluno** que têm aula agendada (professor ativo). O material sai da pasta de quem estava com ele e
+passa a aparecer para o professor escolhido; o arquivo não é copiado nem alterado. O aluno continua vendo
+(e, se foi ele quem enviou, continua podendo apagar). Fica registrado no item: "movido pela secretaria em
+dd/mm (antes: Marcos — Matemática)"; o aluno vê só "encaminhado pela secretaria". O "Enviado por" continua
+mostrando quem enviou de verdade. Só a secretaria move; mover para **outro aluno** não existe (se precisar,
+baixe e peça para reenviar).
 
 ### Limites
 

@@ -390,6 +390,12 @@ CREATE INDEX IF NOT EXISTS idx_free_leads_created ON free_leads(created_at);
 // para ela. Quando há mais de uma, fica sem disciplina ("não definida") até o professor ou a secretaria
 // escolher, pela tela de materiais. Nada é apagado.
 ensureColumn('materials', 'subject_id', 'INTEGER');
+// v22: a secretaria pode mover um material para outro professor/disciplina do mesmo aluno.
+// uploader_teacher_id guarda o professor que ENVIOU (para "Enviado por" continuar certo depois da mudança);
+// moved_at/moved_from registram a mudança (moved_from é um texto como "Marcos — Física").
+ensureColumn('materials', 'uploader_teacher_id', 'INTEGER');
+ensureColumn('materials', 'moved_at', 'TEXT');
+ensureColumn('materials', 'moved_from', 'TEXT');
 db.exec('CREATE INDEX IF NOT EXISTS idx_materials_track ON materials(student_id, teacher_id, subject_id)');
 if (!db.prepare("SELECT 1 FROM settings WHERE key = 'materials.v19_subject_migrated'").get()) {
   const pairs = db.prepare('SELECT DISTINCT student_id, teacher_id FROM materials WHERE subject_id IS NULL').all();

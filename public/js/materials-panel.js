@@ -1,6 +1,6 @@
 // public/js/materials-panel.js
 // Componente compartilhado de "Materiais de aula". Funciona nos três lugares:
-//   - painel da secretaria (ficha do aluno e página "Materiais"): só vê e apaga;
+//   - painel da secretaria (ficha do aluno e página "Materiais"): vê, move (outro professor/disciplina do mesmo aluno) e apaga;
 //   - área do professor: vê e envia materiais para cada aluno dele;
 //   - área do aluno: vê tudo que recebeu e pode enviar para os professores dele.
 // Quem pode o quê é decidido pelo servidor (server/routes/materials.js); aqui a tela só
@@ -50,7 +50,13 @@ const MaterialsPanel = (function () {
     if (viewer === 'teacher') who = m.uploader_type === 'teacher' ? 'você' : `${escapeHtml(m.uploader_name)} (aluno)`;
     else if (viewer === 'student') who = m.uploader_type === 'student' ? 'você' : `${escapeHtml(m.uploader_name)} (professor)`;
     else who = `${escapeHtml(m.uploader_name)} (${m.uploader_type === 'teacher' ? 'professor' : 'aluno'})`;
-    return `Enviado por ${who} em ${escapeHtml(formatDateTime(m.created_at))}`;
+    let moved = '';
+    if (m.moved_at) {
+      moved = viewer === 'admin'
+        ? ` · movido pela secretaria em ${escapeHtml(formatDateTime(m.moved_at))} (antes: ${escapeHtml(m.moved_from || '')})`
+        : ` · encaminhado pela secretaria em ${escapeHtml(formatDate(m.moved_at))}`;
+    }
+    return `Enviado por ${who} em ${escapeHtml(formatDateTime(m.created_at))}${moved}`;
   }
 
   function itemHtml(m, o) {
@@ -64,8 +70,9 @@ const MaterialsPanel = (function () {
     const people = o.showPeople
       ? `<div class="mat-meta">Aluno: <a href="#/alunos/${Number(m.student_id)}">${escapeHtml(m.student_name)}</a> · Professor: ${escapeHtml(m.teacher_name)} · Disciplina: ${escapeHtml(subjectLabel(m))}</div>`
       : '';
-    // Material antigo, sem disciplina: professor do par e secretaria escolhem para qual disciplina mover.
-    const move = !m.subject_id && m.move_options && m.move_options.length
+    // Material antigo, sem disciplina: o professor do par escolhe para qual disciplina mover
+    // (a secretaria usa o botão "Mover", que permite trocar também o professor).
+    const move = o.viewer !== 'admin' && !m.subject_id && m.move_options && m.move_options.length
       ? `<div class="mat-move"><label class="text-sm" for="mat-move-${id}">Mover para a disciplina:</label>
            <select id="mat-move-${id}" data-move="${id}"><option value="">Escolha…</option>${m.move_options.map((op) => `<option value="${Number(op.id)}">${escapeHtml(op.name)}</option>`).join('')}</select></div>`
       : '';
@@ -74,6 +81,7 @@ const MaterialsPanel = (function () {
       actions.push(`<a class="btn btn-outline btn-sm" href="/api/materials/${id}/download" target="_blank" rel="noopener">Baixar</a>`);
       if (m.image) actions.push(`<a class="btn btn-outline btn-sm" href="/api/materials/${id}/download?inline=1" target="_blank" rel="noopener">Abrir</a>`);
     }
+    if (o.viewer === 'admin') actions.push(`<button type="button" class="btn btn-outline btn-sm" data-reroute="${id}">Mover</button>`);
     if (m.can_delete) actions.push(`<button type="button" class="btn btn-danger btn-sm" data-del="${id}">Apagar</button>`);
     return `
       <div class="mat-item" data-id="${id}">
@@ -88,6 +96,42 @@ const MaterialsPanel = (function () {
         </div>
         ${actions.length ? `<div class="mat-actions">${actions.join('')}</div>` : ''}
       </div>`;
+  }
+
+  // Secretaria: mover o material para outro professor e/ou disciplina do mesmo aluno
+  // (ex.: o aluno mandou para a professora errada).
+  async function openReroute(m, o) {
+    if (!m) return;
+    let dests;
+    try { dests = await api.get(`/api/materials/${Number(m.id)}/destinos`); }
+    catch (err) { showToast(err.message, 'error'); return; }
+    const now = `${escapeHtml(m.teacher_name)} — ${escapeHtml(subjectLabel(m))}`;
+    if (!dests.length) {
+      showToast('Não há outro destino: o aluno não tem aula agendada com outro professor ou em outra disciplina.', 'error');
+      return;
+    }
+    const b = openModal(`
+      <div class="modal-header"><h3>Mover material</h3></div>
+      <p><strong>${escapeHtml(m.title)}</strong><br><span class="text-sm muted">Aluno: ${escapeHtml(m.student_name || '')} · hoje está com: ${now}</span></p>
+      <div class="field"><label for="rr-dest">Mover para</label>
+        <select id="rr-dest">${dests.map((d, i) => `<option value="${i}">${escapeHtml(d.teacher_name)} — ${escapeHtml(d.subject_name)}</option>`).join('')}</select>
+        <div class="hint">Aparecem os professores e disciplinas com aula agendada para este aluno.</div></div>
+      <p class="text-sm muted">O material sai da pasta de quem está com ele hoje e passa a aparecer para o professor escolhido. O aluno continua vendo. Fica registrado que a secretaria moveu.</p>
+      <div id="rr-err" class="alert alert-danger hidden"></div>
+      <div class="form-actions"><button type="button" class="btn btn-outline" id="rr-cancel">Cancelar</button><button type="button" class="btn btn-primary" id="rr-ok">Mover</button></div>`);
+    b.querySelector('#rr-cancel').addEventListener('click', closeModal);
+    b.querySelector('#rr-ok').addEventListener('click', async (e) => {
+      const d = dests[Number(b.querySelector('#rr-dest').value)];
+      e.target.disabled = true;
+      try {
+        await api.put(`/api/materials/${Number(m.id)}/destino`, { teacherId: d.teacher_id, subjectId: d.subject_id });
+        closeModal();
+        showToast(`Material movido para ${d.teacher_name} — ${d.subject_name}.`);
+        if (o.onChanged) o.onChanged();
+      } catch (err) {
+        const el = b.querySelector('#rr-err'); el.textContent = err.message; el.classList.remove('hidden'); e.target.disabled = false;
+      }
+    });
   }
 
   // Desenha a lista (agrupada por professor + disciplina, quando pedido) e liga "Apagar" e "Mover".
@@ -131,6 +175,9 @@ const MaterialsPanel = (function () {
         if (o.onChanged) o.onChanged();
       });
     });
+    listEl.querySelectorAll('[data-reroute]').forEach((btn) => {
+      btn.addEventListener('click', () => openReroute(items.find((x) => Number(x.id) === Number(btn.dataset.reroute)), o));
+    });
     listEl.querySelectorAll('[data-del]').forEach((btn) => {
       btn.addEventListener('click', async () => {
         const m = items.find((x) => x.id === Number(btn.dataset.del));
@@ -155,7 +202,7 @@ const MaterialsPanel = (function () {
   function renderUploadBox(slot, ctx, config, targets, onUploaded) {
     const viewer = ctx.viewer;
     if (viewer === 'admin') {
-      slot.innerHTML = '<p class="text-sm muted">Os materiais são enviados pelos professores e pelo próprio aluno. Aqui a secretaria vê e apaga o que for preciso.</p>';
+      slot.innerHTML = '<p class="text-sm muted">Os materiais são enviados pelos professores e pelo próprio aluno. Aqui a secretaria vê, move para o professor certo e apaga o que for preciso.</p>';
       return;
     }
     if (viewer === 'student' && !config.studentUploads) {

@@ -413,11 +413,12 @@ function addLink(opts) {
 // ---------- Consultas ----------
 
 const SELECT_BASE = `
-  SELECT m.*, s.name AS student_name, t.name AS teacher_name, sub.name AS subject_name
+  SELECT m.*, s.name AS student_name, t.name AS teacher_name, sub.name AS subject_name, ut.name AS uploader_teacher_name
   FROM materials m
   JOIN students s ON s.id = m.student_id
   JOIN teachers t ON t.id = m.teacher_id
-  LEFT JOIN subjects sub ON sub.id = m.subject_id`;
+  LEFT JOIN subjects sub ON sub.id = m.subject_id
+  LEFT JOIN teachers ut ON ut.id = m.uploader_teacher_id`;
 
 function asId(value) {
   const n = Number(value);
@@ -475,7 +476,9 @@ function toDto(row) {
     subject_id: row.subject_id || null,
     subject_name: row.subject_id ? (row.subject_name || 'Disciplina removida') : null,
     uploader_type: row.uploader_type,
-    uploader_name: row.uploader_type === 'teacher' ? row.teacher_name : row.student_name,
+    uploader_name: row.uploader_type === 'teacher' ? (row.uploader_teacher_name || row.teacher_name) : row.student_name,
+    moved_at: row.moved_at || null,
+    moved_from: row.moved_from || null,
     file_name: row.original_name || null,
     ext,
     image: !!(ext && FILE_TYPES[ext] && FILE_TYPES[ext].image),
@@ -515,6 +518,18 @@ function getUsage() {
 // Define a disciplina de um material (usado para os materiais antigos, sem disciplina).
 function setSubject(id, subjectId) {
   db.prepare('UPDATE materials SET subject_id = ? WHERE id = ?').run(subjectId, id);
+  return getMaterial(id);
+}
+
+// Move o material para outro professor e/ou disciplina do MESMO aluno (só a secretaria; a rota confere).
+// Guarda quem enviou e de onde veio, para o histórico continuar claro.
+function moveTo(id, teacherId, subjectId) {
+  const row = db.prepare(`${SELECT_BASE} WHERE m.id = ?`).get(id);
+  if (!row) return null;
+  const from = `${row.teacher_name} — ${row.subject_id ? (row.subject_name || 'disciplina removida') : 'disciplina não definida'}`;
+  db.prepare(`UPDATE materials SET teacher_id = ?, subject_id = ?,
+      uploader_teacher_id = CASE WHEN uploader_type = 'teacher' THEN COALESCE(uploader_teacher_id, teacher_id) ELSE uploader_teacher_id END,
+      moved_at = datetime('now', 'localtime'), moved_from = ? WHERE id = ?`).run(teacherId, subjectId, from, id);
   return getMaterial(id);
 }
 
@@ -605,6 +620,7 @@ module.exports = {
   init,
   getUsage,
   setSubject,
+  moveTo,
   remainingBytes,
   receiveFile,
   addLink,
